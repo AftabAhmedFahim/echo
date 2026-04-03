@@ -64,7 +64,11 @@ FONT_NAME = None
 
 # Game states
 STATE_MENU = "menu"
+STATE_CONTROLS = "controls"
+STATE_SETTINGS = "settings"
 STATE_PLAYING = "playing"
+STATE_PAUSE = "pause"
+STATE_TRANSITION = "transition"
 STATE_GAME_OVER = "game_over"
 STATE_ENDING = "ending"
 
