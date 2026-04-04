@@ -1,5 +1,6 @@
 import pygame
 import math
+import random
 
 from settings import WHITE, GREEN, RED, PANEL, BLACK, SCREEN_WIDTH, SCREEN_HEIGHT
 
@@ -8,6 +9,338 @@ CYAN_DIM   = (0, 120, 140)
 ACCENT     = (80, 200, 255)
 ACCENT_DIM = (30, 80, 110)
 NAVY_TRANSPARENT = (8, 16, 32, 220)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# INTRO SEQUENCE
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Five story slides. Each slide has a title, body lines, and a colour theme.
+INTRO_SLIDES = [
+    {
+        "title":  "// INCIDENT REPORT — SPACE STATION ECHO",
+        "lines": [
+            "STARDATE 2147.04 — All systems nominal.",
+            "Station Echo orbits sector 7 as a joint",
+            "research and defence platform.",
+            "",
+            "650 personnel. 300 autonomous drones.",
+            "Mission: peaceful. Routine. Safe.",
+        ],
+        "accent": (0, 200, 255),
+        "icon": "station",
+    },
+    {
+        "title":  "// ANOMALY DETECTED",
+        "lines": [
+            "At 03:42 station-time an unknown energy",
+            "pulse struck the central AI core.",
+            "",
+            "Friend-or-foe protocols: OVERWRITTEN.",
+            "All security drones reclassified every",
+            "life-form on board as a hostile target.",
+        ],
+        "accent": (255, 160, 40),
+        "icon": "warning",
+    },
+    {
+        "title":  "// YOU ARE ECHO-1",
+        "lines": [
+            "You are the last functional unit whose",
+            "identity chip survived the pulse.",
+            "",
+            "The rogue AI is hiding inside a proxy",
+            "core deep in the command sector.",
+            "Only you can reach it.",
+        ],
+        "accent": (80, 255, 140),
+        "icon": "player",
+    },
+    {
+        "title":  "// YOUR MISSION",
+        "lines": [
+            "LEVEL 1 — Restore conduit power",
+            "          to unlock the station grid.",
+            "",
+            "LEVEL 2 — Flip access switches to",
+            "          open the reactor gate.",
+            "",
+            "LEVEL 3 — Align the antennas, breach",
+            "          the core and destroy the boss.",
+        ],
+        "accent": (200, 120, 255),
+        "icon": "mission",
+    },
+    {
+        "title":  "// GOOD LUCK, ECHO-1",
+        "lines": [
+            "The station is counting on you.",
+            "",
+            "Move:         W A S D",
+            "Aim & Shoot:  Mouse",
+            "Interact:     E  or  SPACE",
+            "Pause:        ESC",
+            "",
+            "Press any key or click to begin.",
+        ],
+        "accent": (0, 255, 255),
+        "icon": "controls",
+    },
+]
+
+
+class IntroSequence:
+    """Drives the animated story cutscene state."""
+
+    CHARS_PER_SEC = 42          # typewriter speed
+    HOLD_AFTER_DONE = 1.8       # seconds to pause once text is fully revealed
+    TRANSITION_DUR  = 0.55      # slide fade duration in seconds
+
+    def __init__(self):
+        self.slide_idx    = 0
+        self._char_timer  = 0.0
+        self._chars_shown = 0
+        self._hold_timer  = 0.0
+        self._fading_in   = True
+        self._fade_timer  = 0.0
+        self._done        = False
+
+        # Star-field (parallax)
+        self._stars = [
+            (random.randint(0, SCREEN_WIDTH),
+             random.randint(0, SCREEN_HEIGHT),
+             random.uniform(0.3, 1.8),          # speed
+             random.randint(1, 3))               # size
+            for _ in range(160)
+        ]
+
+    # ── helpers ──────────────────────────────────────────────────────────
+    @property
+    def _slide(self) -> dict:
+        return INTRO_SLIDES[self.slide_idx]
+
+    def _full_text(self) -> str:
+        return "\n".join(self._slide["lines"])
+
+    def _total_chars(self) -> int:
+        return len(self._full_text())
+
+    def is_done(self) -> bool:
+        return self._done
+
+    def reset(self) -> None:
+        self.__init__()
+
+    # ── advance one slide (or finish) ─────────────────────────────────────
+    def _advance(self) -> None:
+        if self.slide_idx < len(INTRO_SLIDES) - 1:
+            self.slide_idx    += 1
+            self._chars_shown  = 0
+            self._char_timer   = 0.0
+            self._hold_timer   = 0.0
+            self._fading_in    = True
+            self._fade_timer   = 0.0
+        else:
+            self._done = True
+
+    # ── on player pressing skip / next ────────────────────────────────────
+    def on_input(self) -> None:
+        if self._chars_shown < self._total_chars():
+            # Reveal all text instantly
+            self._chars_shown = self._total_chars()
+        else:
+            self._advance()
+
+    # ── update called every frame ─────────────────────────────────────────
+    def update(self, dt: float) -> None:
+        if self._done:
+            return
+
+        # Scrolling star-field
+        self._stars = [
+            ((x - spd) % SCREEN_WIDTH, y, spd, sz)
+            for x, y, spd, sz in self._stars
+        ]
+
+        # Fade-in
+        if self._fading_in:
+            self._fade_timer += dt
+            if self._fade_timer >= self.TRANSITION_DUR:
+                self._fading_in = False
+            return   # don't start typewriter until fade-in done
+
+        # Typewriter
+        if self._chars_shown < self._total_chars():
+            self._char_timer += dt
+            new_chars = int(self._char_timer * self.CHARS_PER_SEC)
+            self._chars_shown = min(self._total_chars(), new_chars)
+            return
+
+        # Hold after fully revealed
+        self._hold_timer += dt
+        if self._hold_timer >= self.HOLD_AFTER_DONE:
+            self._advance()
+
+    # ── draw ──────────────────────────────────────────────────────────────
+    def draw(self, surface: pygame.Surface, ui: "UI") -> None:
+        t = pygame.time.get_ticks() / 1000.0
+        slide = self._slide
+        accent = slide["accent"]
+
+        # ── 1. Deep space background ──────────────────────────────────────
+        surface.fill((4, 6, 14))
+
+        # Parallax stars
+        for x, y, spd, sz in self._stars:
+            brightness = int(120 + 80 * math.sin(t * spd + x * 0.01))
+            col = (brightness, brightness, int(brightness * 0.85))
+            pygame.draw.circle(surface, col, (int(x), int(y)), sz)
+
+        # Subtle horizontal scanlines
+        scan = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        for sy in range(0, SCREEN_HEIGHT, 5):
+            scan.fill((0, 200, 255, 8), rect=(0, sy, SCREEN_WIDTH, 2))
+        surface.blit(scan, (0, 0))
+
+        # ── 2. Compute fade alpha ─────────────────────────────────────────
+        if self._fading_in:
+            raw = self._fade_timer / max(0.001, self.TRANSITION_DUR)
+            alpha = int(255 * min(1.0, raw))
+        else:
+            alpha = 255
+
+        fade_surf = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        fade_surf.fill((4, 6, 14, 255 - alpha))
+        surface.blit(fade_surf, (0, 0))
+
+        # ── 3. Slide number indicator ─────────────────────────────────────
+        total = len(INTRO_SLIDES)
+        for i in range(total):
+            dot_x = SCREEN_WIDTH // 2 - (total * 22) // 2 + i * 22
+            dot_col = accent if i == self.slide_idx else (40, 60, 80)
+            pygame.draw.circle(surface, dot_col, (dot_x, SCREEN_HEIGHT - 36), 5)
+
+        # ── 4. Left icon panel ────────────────────────────────────────────
+        icon_rect = pygame.Rect(60, 120, 260, 260)
+        icon_bg   = pygame.Surface((icon_rect.w, icon_rect.h), pygame.SRCALPHA)
+        icon_bg.fill((*accent, 18))
+        surface.blit(icon_bg, icon_rect)
+        pygame.draw.rect(surface, accent, icon_rect, 2, border_radius=8)
+
+        self._draw_slide_icon(surface, slide["icon"], icon_rect, accent, t)
+
+        # Station name below icon
+        lbl = ui.font_small.render(f"[ {self.slide_idx + 1} / {total} ]", True, accent)
+        surface.blit(lbl, lbl.get_rect(center=(icon_rect.centerx, icon_rect.bottom + 20)))
+
+        # ── 5. Text panel on the right ────────────────────────────────────
+        text_x = 380
+        text_w  = SCREEN_WIDTH - text_x - 60
+        text_y  = 100
+
+        # Title with glowing accent line below
+        title_surf = ui.font_medium.render(slide["title"], True, accent)
+        surface.blit(title_surf, (text_x, text_y))
+
+        pulse = 0.5 + 0.5 * math.sin(t * 2.5)
+        line_alpha = int(120 + 135 * pulse)
+        pygame.draw.line(surface, (*accent, line_alpha), (text_x, text_y + 38), (text_x + text_w, text_y + 38), 2)
+
+        # Typewriter body text
+        body_text  = self._full_text()
+        visible    = body_text[:self._chars_shown]
+        body_lines = visible.split("\n")
+
+        by = text_y + 58
+        for ln in body_lines:
+            col = WHITE if ln else WHITE
+            row = ui.font_medium.render(ln, True, col)
+            surface.blit(row, (text_x, by))
+            by += 40
+
+        # Blinking cursor while still typing
+        if self._chars_shown < self._total_chars():
+            if int(t * 2) % 2 == 0:
+                pygame.draw.rect(surface, accent, (text_x + ui.font_medium.size(body_lines[-1])[0] + 2, by - 38, 3, 28))
+
+        # ── 6. Bottom hint ───────────────────────────────────────────────
+        if self._chars_shown >= self._total_chars():
+            hint_alpha = int(180 + 75 * math.sin(t * 3.0))
+            is_last = self.slide_idx == len(INTRO_SLIDES) - 1
+            hint_text = "Press any key or click to START" if is_last else "Press any key or click for next"
+            hint = ui.font_small.render(hint_text, True, (hint_alpha, hint_alpha, hint_alpha))
+            surface.blit(hint, hint.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 72)))
+
+        # ── 7. CRT vignette ───────────────────────────────────────────────
+        vig = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        for edge_y in range(80):
+            a = int(130 * (1 - edge_y / 80))
+            vig.fill((0, 0, 0, a), rect=(0, edge_y, SCREEN_WIDTH, 1))
+            vig.fill((0, 0, 0, a), rect=(0, SCREEN_HEIGHT - 1 - edge_y, SCREEN_WIDTH, 1))
+        for edge_x in range(60):
+            a = int(100 * (1 - edge_x / 60))
+            vig.fill((0, 0, 0, a), rect=(edge_x, 0, 1, SCREEN_HEIGHT))
+            vig.fill((0, 0, 0, a), rect=(SCREEN_WIDTH - 1 - edge_x, 0, 1, SCREEN_HEIGHT))
+        surface.blit(vig, (0, 0))
+
+    # ── icon renderer ─────────────────────────────────────────────────────
+    def _draw_slide_icon(self, surface, icon_id, rect, accent, t):
+        cx, cy = rect.centerx, rect.centery
+        pulse = 0.5 + 0.5 * math.sin(t * 2.0)
+
+        if icon_id == "station":
+            # Hexagonal station shape
+            pts = [(cx + int(70 * math.cos(math.radians(a))),
+                    cy + int(70 * math.sin(math.radians(a)))) for a in range(0, 360, 60)]
+            pygame.draw.polygon(surface, (*accent, 40), pts)
+            pygame.draw.polygon(surface, accent, pts, 2)
+            pygame.draw.circle(surface, accent, (cx, cy), 22, 3)
+            for a in [0, 120, 240]:
+                ex = cx + int(65 * math.cos(math.radians(a)))
+                ey = cy + int(65 * math.sin(math.radians(a)))
+                pygame.draw.line(surface, accent, (cx, cy), (ex, ey), 2)
+
+        elif icon_id == "warning":
+            # Pulsing triangle warning
+            r = int(55 + 8 * pulse)
+            pts = [(cx, cy - r), (cx + int(r * 0.9), cy + int(r * 0.6)),
+                   (cx - int(r * 0.9), cy + int(r * 0.6))]
+            pygame.draw.polygon(surface, (*accent, 60), pts)
+            pygame.draw.polygon(surface, accent, pts, 3)
+            bang = pygame.font.SysFont(None, 64).render("!", True, accent)
+            surface.blit(bang, bang.get_rect(center=(cx, cy + 8)))
+
+        elif icon_id == "player":
+            # Robot/player silhouette
+            pygame.draw.rect(surface, accent, (cx - 20, cy - 42, 40, 36), 2, border_radius=4)
+            pygame.draw.circle(surface, accent, (cx, cy - 24), 4)
+            pygame.draw.rect(surface, accent, (cx - 30, cy - 4, 60, 44), 2, border_radius=4)
+            pygame.draw.line(surface, accent, (cx - 30, cy + 15), (cx - 48, cy + 40), 2)
+            pygame.draw.line(surface, accent, (cx + 30, cy + 15), (cx + 48, cy + 40), 2)
+            pygame.draw.line(surface, accent, (cx - 16, cy + 40), (cx - 16, cy + 68), 2)
+            pygame.draw.line(surface, accent, (cx + 16, cy + 40), (cx + 16, cy + 68), 2)
+
+        elif icon_id == "mission":
+            # Checklist / objective scroll
+            for i, (done, dy) in enumerate([(True, -50), (True, -20), (False, 10), (False, 40)]):
+                col = (0, 220, 100) if done else accent
+                pygame.draw.rect(surface, col, (cx - 60, cy + dy, 120, 18), 1 if not done else 0, border_radius=3)
+                if done:
+                    pygame.draw.line(surface, (0, 0, 0), (cx - 55, cy + dy + 9), (cx - 45, cy + dy + 15), 2)
+                    pygame.draw.line(surface, (0, 0, 0), (cx - 45, cy + dy + 15), (cx - 30, cy + dy + 4), 2)
+
+        elif icon_id == "controls":
+            # WASD key diagram
+            keys = [("W", cx, cy - 44), ("A", cx - 38, cy - 6),
+                    ("S", cx, cy - 6), ("D", cx + 38, cy - 6)]
+            for lbl, kx, ky in keys:
+                pygame.draw.rect(surface, accent, (kx - 16, ky - 16, 32, 32), 2, border_radius=4)
+                k = pygame.font.SysFont(None, 28).render(lbl, True, accent)
+                surface.blit(k, k.get_rect(center=(kx, ky)))
+            # Mouse
+            pygame.draw.ellipse(surface, accent, (cx + 28, cy - 10, 28, 40), 2)
+            pygame.draw.line(surface, accent, (cx + 42, cy - 10), (cx + 42, cy + 6), 2)
+
 
 
 class UI:

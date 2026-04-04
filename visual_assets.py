@@ -114,6 +114,28 @@ class VisualAssets:
                 return None
         return self._background_cache[cache_key]
 
+    def get_portal_frames(self, size: int = 96) -> list[pygame.Surface]:
+        """Load the 9-frame portal animation strip from assets/Portal/."""
+        cache_key = f"portal_frames_{size}"
+        if cache_key in self._background_cache:
+            return self._background_cache[cache_key]  # type: ignore[return-value]
+
+        frames: list[pygame.Surface] = []
+        for i in range(1, 10):
+            path = f"assets/Portal/{i:02d}.png"
+            img = self._load_image(path, (size, size))
+            if img is not None:
+                frames.append(img)
+
+        # Fallback: single purple circle frame if images missing
+        if not frames:
+            surf = pygame.Surface((size, size), pygame.SRCALPHA)
+            pygame.draw.circle(surf, (140, 70, 240), (size // 2, size // 2), size // 2)
+            frames.append(surf)
+
+        self._background_cache[cache_key] = frames  # type: ignore[assignment]
+        return frames
+
     def get_player_animations(self) -> dict[str, AnimationClip]:
         if "player" in self._animation_cache:
             return self._animation_cache["player"]
