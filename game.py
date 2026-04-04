@@ -4,7 +4,7 @@ from player import Player
 from projectiles import Bullet, EnemyBullet
 from enemies import InterceptorDrone
 from level_manager import LevelData
-from ui import UI
+from ui import UI, IntroSequence
 from audio import AudioManager
 from state_manager import StateManager
 from visual_assets import VisualAssets
@@ -41,6 +41,9 @@ class Game:
         self.transition_duration = 1.1
         self.transition_target_level: int | None = None
         self.transition_final = False
+
+        # Story intro sequence (shown before the very first level)
+        self.intro = IntroSequence()
 
         self.load_level(self.current_level_id)
 
@@ -83,12 +86,16 @@ class Game:
         self.state.set_playing()
 
     def start_new_game(self) -> None:
+        """Launch the story intro sequence, then start from Level 1."""
+        self.intro.reset()
+        self.state.set_intro()
+
+    def _begin_actual_game(self) -> None:
+        """Called after the intro sequence finishes."""
         self.lives_left = self.max_lives
         self.load_level(1, show_loading=True, loading_title="LEVEL 1", loading_duration=2.0)
         self.state.set_playing()
 
-    def go_to_menu(self) -> None:
-        self.state.set_menu()
 
     def toggle_music(self) -> None:
         self.audio.toggle_music()
@@ -158,6 +165,9 @@ class Game:
                     self.state.set_pause()
                 elif event.key == pygame.K_r:
                     self.restart_level()
+
+            elif self.state.is_intro():
+                self.intro.on_input()
 
             elif self.state.is_settings():
                 if event.key == pygame.K_ESCAPE:
@@ -234,7 +244,17 @@ class Game:
                         self.bullets.append(Bullet(**b_data))
                     self.audio.play("shoot")
 
+            if self.state.is_intro():
+                self.intro.on_input()
+
     def update(self, dt: float) -> None:
+        # ── Intro sequence ────────────────────────────────────────────────
+        if self.state.is_intro():
+            self.intro.update(dt)
+            if self.intro.is_done():
+                self._begin_actual_game()
+            return
+
         if self.state.is_transition():
             self.transition_timer -= dt
             if self.transition_timer <= 0:
@@ -259,6 +279,10 @@ class Game:
             return
 
         self.player.update(dt, self.level.walls)
+
+        # Tick portal animation when active
+        if self.level.portal_active and self.level.portal is not None:
+            self.level.portal.update(dt)
 
         changed_room, door_message, level_exit = self.level.process_room_transitions(self.player)
         if door_message:
@@ -337,7 +361,10 @@ class Game:
                 return
             return
 
-        if self.level.check_complete(self.player, self.interact_pressed):
+        # Portal-based level completion: check_complete spawns the portal
+        # the first time objectives are met; the player must then walk into it.
+        self.level.check_complete(self.player, self.interact_pressed)
+        if self.level.check_portal_entered(self.player):
             self.next_level()
 
         self.interact_pressed = False
@@ -358,6 +385,11 @@ class Game:
 
     def draw(self) -> None:
         self.draw_background()
+
+        # ── Story intro ───────────────────────────────────────────────────
+        if self.state.is_intro():
+            self.intro.draw(self.screen, self.ui)
+            return
 
         if self.state.is_menu():
             self.ui.draw_menu(self.screen)

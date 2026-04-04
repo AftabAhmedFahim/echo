@@ -71,6 +71,7 @@ STATE_PAUSE = "pause"
 STATE_TRANSITION = "transition"
 STATE_GAME_OVER = "game_over"
 STATE_ENDING = "ending"
+STATE_INTRO = "intro"
 
 # Level objective text
 LEVEL_NAMES = {
