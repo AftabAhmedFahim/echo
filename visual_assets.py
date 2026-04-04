@@ -11,6 +11,11 @@ class VisualAssets:
         self._background_cache: dict[object, pygame.Surface] = {}
         self._animation_cache: dict[str, dict[str, AnimationClip]] = {}
 
+        self.main_room_ids = {
+            1: "hub",
+            2: "main_hall",
+            3: "array_field",
+        }
         self.background_files = {
             1: "assets/backgrounds/level_1.png",
             2: "assets/backgrounds/level_2.png",
@@ -25,18 +30,49 @@ class VisualAssets:
         }
 
     def get_level_background(self, level_id: int, room_id: str | None = None) -> pygame.Surface:
-        cache_key = (level_id, room_id or "")
-        if cache_key not in self._background_cache:
-            # Room-specific background overrides level defaults (used for Level 3 final boss room).
-            image_path = self.room_background_files.get((level_id, room_id or ""))
-            if image_path is None:
-                image_path = self.background_files.get(level_id, "")
+        room_override = self.room_background_files.get((level_id, room_id or ""))
+        if room_override:
+            cache_key = ("room_override", level_id, room_id or "")
+            if cache_key not in self._background_cache:
+                image = self._load_image(room_override, (SCREEN_WIDTH, SCREEN_HEIGHT))
+                if image is not None:
+                    self._background_cache[cache_key] = image
+                else:
+                    self._background_cache[cache_key] = self._build_fallback_background(level_id)
+            return self._background_cache[cache_key]
 
-            image = self._load_image(image_path, (SCREEN_WIDTH, SCREEN_HEIGHT))
-            if image is not None:
-                self._background_cache[cache_key] = image
+        is_main_room = room_id == self.main_room_ids.get(level_id)
+        cache_key = ("main" if is_main_room else "room_floor", level_id, room_id or "")
+        if cache_key not in self._background_cache:
+            if is_main_room:
+                image_path = self.background_files.get(level_id, "")
+                image = self._load_image(image_path, (SCREEN_WIDTH, SCREEN_HEIGHT))
+                if image is not None:
+                    self._background_cache[cache_key] = image
+                else:
+                    self._background_cache[cache_key] = self._build_fallback_background(level_id)
             else:
-                self._background_cache[cache_key] = self._build_fallback_background(level_id)
+                self._background_cache[cache_key] = self.get_room_floor_background()
+
+        return self._background_cache[cache_key]
+
+    def get_room_floor_background(self) -> pygame.Surface:
+        cache_key = "room_floor"
+        if cache_key not in self._background_cache:
+            floor_tile = self._load_image("assets/backgrounds/space_station_floor.png", None)
+            background = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+            if floor_tile:
+                tile_w, tile_h = floor_tile.get_size()
+                new_size = (int(tile_w * 0.5), int(tile_h * 0.5))
+                floor_tile = pygame.transform.scale(floor_tile, new_size)
+                tile_w, tile_h = floor_tile.get_size()
+
+                for x in range(0, SCREEN_WIDTH, tile_w):
+                    for y in range(0, SCREEN_HEIGHT, tile_h):
+                        background.blit(floor_tile, (x, y))
+            else:
+                background.fill((22, 27, 36))
+            self._background_cache[cache_key] = background
 
         return self._background_cache[cache_key]
 
