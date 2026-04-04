@@ -207,8 +207,8 @@ class LevelData:
         self.current_room_id = "hub"
         hub = self._create_room("hub", "Conduit Hub", (640, 360))
         north = self._create_room("north", "Cooling Junction", (640, 610))
-        west = self._create_room("west", "Power Relay", (1140, 360))
-        east = self._create_room("east", "Signal Channel", (140, 360))
+        west = self._create_room("west", "Power Relay", (140, 360))
+        east = self._create_room("east", "Signal Channel", (1140, 360))
         south = self._create_room("south", "Maintenance Loop", (640, 120))
 
         hub.walls.extend([
@@ -224,8 +224,8 @@ class LevelData:
         hub.doors = [
             Door(pygame.Rect(608, 34, 64, 30), "north", pygame.Vector2(640, 630), "To Cooling Junction"),
             Door(pygame.Rect(608, 656, 64, 30), "south", pygame.Vector2(640, 94), "To Maintenance Loop"),
-            Door(pygame.Rect(34, 328, 30, 64), "east", pygame.Vector2(1160, 360), "To Signal Channel"),
-            Door(pygame.Rect(1216, 328, 30, 64), "west", pygame.Vector2(120, 360), "To Power Relay"),
+            Door(pygame.Rect(34, 328, 30, 64), "west", pygame.Vector2(120, 360), "To Power Relay"),
+            Door(pygame.Rect(1216, 328, 30, 64), "east", pygame.Vector2(1160, 360), "To Signal Channel"),
         ]
 
         for room, conduit_pos, enemies in [

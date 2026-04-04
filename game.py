@@ -23,6 +23,8 @@ class Game:
         self.visual_assets = VisualAssets()
 
         self.current_level_id = 1
+        self.max_lives = 3
+        self.lives_left = self.max_lives
         self.level: LevelData | None = None
         self.player: Player | None = None
         self.bullets: list[Bullet] = []
@@ -34,6 +36,10 @@ class Game:
         self.loading_timer = 0.0
         self.loading_duration = 1.2
         self.loading_title = ""
+        self.transition_timer = 0.0
+        self.transition_duration = 1.1
+        self.transition_target_level: int | None = None
+        self.transition_final = False
 
         self.load_level(self.current_level_id)
 
@@ -42,7 +48,13 @@ class Game:
         self.loading_duration = duration
         self.loading_timer = duration
 
-    def load_level(self, level_id: int) -> None:
+    def load_level(
+        self,
+        level_id: int,
+        show_loading: bool = True,
+        loading_title: str | None = None,
+        loading_duration: float = 2.0,
+    ) -> None:
         self.current_level_id = level_id
         self.level = LevelData(level_id, self.visual_assets)
         self.player = Player(
@@ -55,36 +67,112 @@ class Game:
         self.message_timer = 0.0
         self.interact_held = False
         self.interact_pressed = False
-        self.start_transition(f"Loading {self.level.name}", 1.05)
+        self.transition_timer = 0.0
+        self.transition_target_level = None
+        self.transition_final = False
+        if show_loading:
+            self.loading_title = loading_title or f"LEVEL {level_id}"
+            self.loading_duration = loading_duration
+            self.loading_timer = loading_duration
+        else:
+            self.loading_timer = 0.0
 
     def restart_level(self) -> None:
         self.load_level(self.current_level_id)
         self.state.set_playing()
 
+    def start_new_game(self) -> None:
+        self.lives_left = self.max_lives
+        self.load_level(1, show_loading=True, loading_title="LEVEL 1", loading_duration=2.0)
+        self.state.set_playing()
+
+    def go_to_menu(self) -> None:
+        self.state.set_menu()
+
+    def toggle_music(self) -> None:
+        self.audio.toggle_music()
+
+    def begin_level_transition(self, target_level: int | None, final: bool = False) -> None:
+        self.state.set_transition()
+        self.transition_timer = self.transition_duration
+        self.transition_target_level = target_level
+        self.transition_final = final
+        self.loading_timer = 0.0
+        self.message = ""
+        self.message_timer = 0.0
+        self.interact_held = False
+        self.interact_pressed = False
+        self.audio.play_slide()
+
+    def finish_level_transition(self) -> None:
+        if self.transition_final or self.transition_target_level is None:
+            self.state.set_ending()
+        else:
+            self.load_level(
+                self.transition_target_level,
+                show_loading=True,
+                loading_title=f"LEVEL {self.transition_target_level}",
+                loading_duration=2.0,
+            )
+            self.state.set_playing()
+
+        self.transition_timer = 0.0
+        self.transition_target_level = None
+        self.transition_final = False
+
+    def handle_player_death(self) -> None:
+        if self.lives_left > 1:
+            self.lives_left -= 1
+            self.load_level(self.current_level_id, show_loading=False)
+            self.state.set_playing()
+            self.message = "Life lost"
+            self.message_timer = 1.4
+            return
+
+        self.lives_left = 0
+        self.state.set_game_over()
+
     def next_level(self) -> None:
         if self.current_level_id < 3:
-            self.load_level(self.current_level_id + 1)
-            self.state.set_playing()
+            self.begin_level_transition(self.current_level_id + 1)
         else:
-            self.state.set_ending()
+            self.begin_level_transition(None, final=True)
+
+    def check_button_click(self, mouse_pos: tuple[int, int], button_rect: pygame.Rect) -> bool:
+        return button_rect.collidepoint(mouse_pos)
 
     def handle_event(self, event: pygame.event.Event) -> None:
         if event.type == pygame.KEYDOWN:
-            if self.state.is_menu() and event.key == pygame.K_RETURN:
-                self.state.set_playing()
-                if self.level:
-                    self.start_transition(f"Loading {self.level.name}", 1.05)
+            if self.state.is_menu() and event.key == pygame.K_ESCAPE:
+                pygame.event.post(pygame.event.Event(pygame.QUIT))
+
+            elif self.state.is_menu() and event.key == pygame.K_RETURN:
+                self.start_new_game()
 
             elif self.state.is_playing():
                 if event.key in (pygame.K_e, pygame.K_SPACE):
                     self.interact_held = True
                     self.interact_pressed = True
+                elif event.key == pygame.K_ESCAPE:
+                    self.state.set_pause()
                 elif event.key == pygame.K_r:
                     self.restart_level()
 
+            elif self.state.is_settings():
+                if event.key == pygame.K_ESCAPE:
+                    self.state.set_menu()
+
+            elif self.state.is_controls():
+                if event.key == pygame.K_ESCAPE:
+                    self.state.set_menu()
+
+            elif self.state.is_pause():
+                if event.key == pygame.K_ESCAPE:
+                    self.state.set_playing()
+
             elif self.state.is_game_over():
-                if event.key == pygame.K_r:
-                    self.restart_level()
+                if event.key == pygame.K_RETURN:
+                    self.state.set_menu()
 
             elif self.state.is_ending():
                 if event.key == pygame.K_ESCAPE:
@@ -95,7 +183,48 @@ class Game:
                 self.interact_held = False
 
         elif event.type == pygame.MOUSEBUTTONDOWN:
-            if self.state.is_playing() and event.button == 1 and self.player and not self.player.is_dead:
+            if event.button != 1:
+                return
+
+            mouse_pos = event.pos
+
+            if self.state.is_menu():
+                start_rect, settings_rect, controls_rect, exit_rect = self.ui.get_menu_buttons()
+                if self.check_button_click(mouse_pos, start_rect):
+                    self.start_new_game()
+                elif self.check_button_click(mouse_pos, settings_rect):
+                    self.state.set_settings()
+                elif self.check_button_click(mouse_pos, controls_rect):
+                    self.state.set_controls()
+                elif self.check_button_click(mouse_pos, exit_rect):
+                    pygame.event.post(pygame.event.Event(pygame.QUIT))
+                return
+
+            if self.state.is_settings():
+                music_rect, back_rect = self.ui.get_settings_buttons()
+                if self.check_button_click(mouse_pos, music_rect):
+                    self.toggle_music()
+                elif self.check_button_click(mouse_pos, back_rect):
+                    self.state.set_menu()
+                return
+
+            if self.state.is_controls():
+                back_rect = self.ui.get_controls_buttons()[0]
+                if self.check_button_click(mouse_pos, back_rect):
+                    self.state.set_menu()
+                return
+
+            if self.state.is_pause():
+                continue_rect, menu_rect, music_rect = self.ui.get_pause_buttons()
+                if self.check_button_click(mouse_pos, continue_rect):
+                    self.state.set_playing()
+                elif self.check_button_click(mouse_pos, menu_rect):
+                    self.go_to_menu()
+                elif self.check_button_click(mouse_pos, music_rect):
+                    self.toggle_music()
+                return
+
+            if self.state.is_playing() and self.player and not self.player.is_dead:
                 if self.loading_timer > 0:
                     return
                 bullet_data = self.player.shoot()
@@ -104,14 +233,20 @@ class Game:
                     self.audio.play("shoot")
 
     def update(self, dt: float) -> None:
-        if self.message_timer > 0:
-            self.message_timer -= dt
-            if self.message_timer <= 0:
-                self.message = ""
+        if self.state.is_transition():
+            self.transition_timer -= dt
+            if self.transition_timer <= 0:
+                self.finish_level_transition()
+            return
 
         if not self.state.is_playing():
             self.interact_pressed = False
             return
+
+        if self.message_timer > 0:
+            self.message_timer -= dt
+            if self.message_timer <= 0:
+                self.message = ""
 
         assert self.level is not None
         assert self.player is not None
@@ -133,7 +268,6 @@ class Game:
             return
         if changed_room:
             self.bullets.clear()
-            self.start_transition(f"Entering {self.level.current_room.name}", 0.5)
             self.interact_pressed = False
             return
 
@@ -182,7 +316,10 @@ class Game:
 
         if self.player.is_dead:
             self.audio.play("death")
-            self.state.set_game_over()
+            self.handle_player_death()
+            if self.state.is_game_over():
+                return
+            return
 
         if self.level.check_complete(self.player, self.interact_pressed):
             self.next_level()
@@ -190,7 +327,7 @@ class Game:
         self.interact_pressed = False
 
     def draw_background(self) -> None:
-        if self.state.is_menu() or not self.level:
+        if self.state.is_menu() or self.state.is_settings() or self.state.is_controls() or not self.level:
             self.screen.fill(BG_DARK)
             for x in range(0, SCREEN_WIDTH, 48):
                 pygame.draw.line(self.screen, GRID, (x, 0), (x, SCREEN_HEIGHT))
@@ -207,6 +344,16 @@ class Game:
             self.ui.draw_menu(self.screen)
             return
 
+        if self.state.is_settings():
+            self.ui.draw_menu(self.screen)
+            self.ui.draw_settings(self.screen, self.audio.music_enabled)
+            return
+
+        if self.state.is_controls():
+            self.ui.draw_menu(self.screen)
+            self.ui.draw_controls(self.screen)
+            return
+
         assert self.level is not None
         assert self.player is not None
 
@@ -221,6 +368,7 @@ class Game:
         self.player.draw(self.screen)
 
         self.ui.draw_health_bar(self.screen, self.player.health, self.player.max_health)
+        self.ui.draw_lives(self.screen, self.lives_left, self.max_lives)
         level_title = f"{self.level.name} / {self.level.current_room.name}"
         self.ui.draw_objective(self.screen, level_title, self.level.update_objective_text())
 
@@ -234,8 +382,15 @@ class Game:
         if self.state.is_game_over():
             self.ui.draw_game_over(self.screen)
 
+        if self.state.is_pause():
+            self.ui.draw_pause(self.screen, self.audio.music_enabled)
+
         if self.state.is_ending():
             self.ui.draw_ending(self.screen)
+
+        if self.state.is_transition():
+            progress = 1.0 - (self.transition_timer / max(0.001, self.transition_duration))
+            self.ui.draw_level_transition(self.screen, progress)
 
         if self.state.is_playing() and self.loading_timer > 0:
             self.ui.draw_loading_transition(
