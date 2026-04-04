@@ -37,3 +37,10 @@ class Bullet:
 
     def draw(self, surface: pygame.Surface) -> None:
         pygame.draw.circle(surface, CYAN, (int(self.pos.x), int(self.pos.y)), self.radius)
+
+class EnemyBullet(Bullet):
+    def __init__(self, x: float, y: float, vx: float, vy: float, damage: int):
+        super().__init__(x, y, vx, vy, damage)
+
+    def draw(self, surface: pygame.Surface) -> None:
+        pygame.draw.circle(surface, (255, 80, 80), (int(self.pos.x), int(self.pos.y)), self.radius)

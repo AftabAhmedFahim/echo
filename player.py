@@ -28,7 +28,11 @@ class Player:
         self.is_dead = False
         self.facing_angle = 0.0
         self.attack_anim_timer = 0.0
-        self.animator = Animator(animations, "idle") if animations else None
+        self.weapon_module = "default"
+        self.direction = "down"
+        self.picking_up = False
+        self.pickup_timer = 0.0
+        self.animator = Animator(animations, "idle_down") if animations else None
 
     @property
     def rect(self) -> pygame.Rect:
@@ -43,17 +47,28 @@ class Player:
         if self.is_dead:
             return
 
-        keys = pygame.key.get_pressed()
-        move = pygame.Vector2(0, 0)
+        if self.picking_up:
+            keys = []
+            move = pygame.Vector2(0, 0)
+        else:
+            keys = pygame.key.get_pressed()
+            move = pygame.Vector2(0, 0)
 
-        if keys[pygame.K_w]:
-            move.y -= 1
-        if keys[pygame.K_s]:
-            move.y += 1
-        if keys[pygame.K_a]:
-            move.x -= 1
-        if keys[pygame.K_d]:
-            move.x += 1
+            if keys[pygame.K_w]:
+                move.y -= 1
+            if keys[pygame.K_s]:
+                move.y += 1
+            if keys[pygame.K_a]:
+                move.x -= 1
+            if keys[pygame.K_d]:
+                move.x += 1
+
+            mouse_pos = pygame.Vector2(pygame.mouse.get_pos())
+            aim = mouse_pos - self.pos
+            if aim.length_squared() > 0:
+                self.facing_angle = math.atan2(aim.y, aim.x)
+                
+            self._update_direction(move)
 
         if move.length_squared() > 0:
             move = move.normalize()
@@ -61,11 +76,6 @@ class Player:
         self.vel = move * PLAYER_SPEED
         self._move_axis(self.vel.x * dt, 0, walls)
         self._move_axis(0, self.vel.y * dt, walls)
-
-        mouse_pos = pygame.Vector2(pygame.mouse.get_pos())
-        aim = mouse_pos - self.pos
-        if aim.length_squared() > 0:
-            self.facing_angle = math.atan2(aim.y, aim.x)
 
         self.pos.x = max(self.radius, min(SCREEN_WIDTH - self.radius, self.pos.x))
         self.pos.y = max(self.radius, min(SCREEN_HEIGHT - self.radius, self.pos.y))
@@ -76,14 +86,19 @@ class Player:
             self.invuln_timer -= dt
         if self.attack_anim_timer > 0:
             self.attack_anim_timer -= dt
+            
+        if self.picking_up:
+            self.pickup_timer -= dt
+            if self.pickup_timer <= 0:
+                self.picking_up = False
 
         if self.animator:
-            if self.attack_anim_timer > 0:
-                self.animator.set_state("attack")
+            if self.picking_up:
+                self.animator.set_state(f"pickup_{self.direction}")
             elif self.vel.length_squared() > 0.1:
-                self.animator.set_state("move")
+                self.animator.set_state(f"move_{self.direction}")
             else:
-                self.animator.set_state("idle")
+                self.animator.set_state(f"idle_{self.direction}")
             self.animator.update(dt)
 
     def _move_axis(self, dx: float, dy: float, walls: list[pygame.Rect]) -> None:
@@ -108,22 +123,37 @@ class Player:
                 rect = self.rect
 
     def can_shoot(self) -> bool:
-        return (not self.is_dead) and self.fire_cooldown <= 0
+        return (not self.is_dead) and self.fire_cooldown <= 0 and not self.picking_up
 
     def shoot(self):
         if not self.can_shoot():
-            return None
+            return []
+
+        self.attack_anim_timer = 0.16
+        bullets = []
+
+        if self.weapon_module == "shotgun":
+            self.fire_cooldown = PLAYER_FIRE_COOLDOWN * 2.5
+            for angle_offset in [-0.2, 0, 0.2]:
+                direction = pygame.Vector2(math.cos(self.facing_angle + angle_offset), math.sin(self.facing_angle + angle_offset))
+                bullets.append({
+                    "x": self.pos.x + direction.x * (self.radius + 8),
+                    "y": self.pos.y + direction.y * (self.radius + 8),
+                    "vx": direction.x * PLAYER_BULLET_SPEED,
+                    "vy": direction.y * PLAYER_BULLET_SPEED,
+                    "damage": PLAYER_BULLET_DAMAGE * 1.5,
+                })
+            return bullets
 
         direction = pygame.Vector2(math.cos(self.facing_angle), math.sin(self.facing_angle))
         self.fire_cooldown = PLAYER_FIRE_COOLDOWN
-        self.attack_anim_timer = 0.16
-        return {
+        return [{
             "x": self.pos.x + direction.x * (self.radius + 8),
             "y": self.pos.y + direction.y * (self.radius + 8),
             "vx": direction.x * PLAYER_BULLET_SPEED,
             "vy": direction.y * PLAYER_BULLET_SPEED,
             "damage": PLAYER_BULLET_DAMAGE,
-        }
+        }]
 
     def take_damage(self, amount: int) -> None:
         if self.invuln_timer > 0 or self.is_dead:
@@ -135,30 +165,51 @@ class Player:
             self.health = 0
             self.is_dead = True
 
+    def play_pickup(self) -> None:
+        self.picking_up = True
+        self.pickup_timer = 1.0
+        if self.animator:
+            self.animator.set_state(f"pickup_{self.direction}", restart=True)
+
+    def _update_direction(self, move_vector: pygame.Vector2) -> None:
+        if move_vector.length_squared() == 0:
+            return
+            
+        deg = math.degrees(math.atan2(move_vector.y, move_vector.x)) % 360
+        if 45 <= deg < 135:
+            self.direction = "down"
+        elif 135 <= deg < 225:
+            self.direction = "left"
+        elif 225 <= deg < 315:
+            self.direction = "up"
+        else:
+            self.direction = "right"
+
     def respawn(self) -> None:
         self.pos = self.spawn_pos.copy()
         self.health = self.max_health
         self.fire_cooldown = 0.0
         self.invuln_timer = PLAYER_RESPAWN_INVULN
         self.is_dead = False
+        self.picking_up = False
+        self.pickup_timer = 0.0
         self.attack_anim_timer = 0.0
         if self.animator:
-            self.animator.set_state("idle", restart=True)
+            self.animator.set_state("idle_down", restart=True)
 
     def draw(self, surface: pygame.Surface) -> None:
         if self.animator:
             frame = self.animator.get_frame()
-            angle_degrees = -math.degrees(self.facing_angle)
-            rotated = pygame.transform.rotozoom(frame, angle_degrees, 1.0)
-            rect = rotated.get_rect(center=(int(self.pos.x), int(self.pos.y)))
+            rect = frame.get_rect(center=(int(self.pos.x), int(self.pos.y)))
 
             if self.invuln_timer > 0 and int(self.invuln_timer * 20) % 2 == 0:
-                rotated = rotated.copy()
-                rotated.set_alpha(140)
-            surface.blit(rotated, rect)
+                frame = frame.copy()
+                frame.set_alpha(140)
+            surface.blit(frame, rect)
             return
 
         pygame.draw.circle(surface, (70, 150, 255), (int(self.pos.x), int(self.pos.y)), self.radius)
+        # Fallback gun line depending on direction
         gun_tip = (
             int(self.pos.x + math.cos(self.facing_angle) * (self.radius + 10)),
             int(self.pos.y + math.sin(self.facing_angle) * (self.radius + 10)),
