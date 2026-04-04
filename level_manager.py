@@ -212,12 +212,23 @@ class LevelData:
         east = self._create_room("east", "Signal Channel", (1300, 500))
         south = self._create_room("south", "Maintenance Loop", (768, 200))
 
-        # Hub is fully segmented by dense servers
+        # Hub uses offset server banks to create readable but dangerous lanes
         hub.obstacles.extend([
-            Obstacle(300, 400, 96, 256, "scifi_server"),
-            Obstacle(1100, 400, 96, 256, "scifi_server"),
-            Obstacle(600, 200, 256, 96, "scifi_server"),
-            Obstacle(400, 560, 256, 96, "scifi_server"),
+            Obstacle(336, 220, 96, 256, "scifi_server"),
+            Obstacle(1104, 220, 96, 256, "scifi_server"),
+            Obstacle(624, 168, 288, 96, "scifi_server"),
+            Obstacle(624, 600, 288, 96, "scifi_server"),
+            Obstacle(488, 392, 192, 96, "scifi_server"),
+            Obstacle(856, 392, 192, 96, "scifi_server"),
+        ])
+        # Added tire/pipe clutter without replacing existing blockers.
+        hub.obstacles.extend([
+            Obstacle(250, 170, 58, 58, "tire"),
+            Obstacle(250, 212, 58, 58, "tire"),
+            Obstacle(250, 254, 58, 58, "tire"),
+            Obstacle(1210, 510, 58, 58, "tire"),
+            Obstacle(1210, 552, 58, 58, "tire"),
+            Obstacle(1210, 594, 58, 58, "tire"),
         ])
         hub.message_fragments.append(MessageFragment(732, 420, "Fragment 1/3: ERROR. Critical impact detected. Unknown lifeform breached sector 7... AI friend/foe protocols overwritten."))
         hub.enemies.extend([
@@ -247,11 +258,19 @@ class LevelData:
             (east, (1100, 408), [("seeker", 432, 264), ("interceptor", 840, 600)]),
             (south, (744, 600), [("patrol", 552, 336), ("seeker", 1032, 576)]),
         ]:
-            # Add sprawling crates in wings
+            # Wing rooms get mirrored crate lanes and a center blocker
             room.obstacles.extend([
-                Obstacle(450, 250, 128, 128, "scifi_crate"),
-                Obstacle(950, 250, 128, 128, "scifi_crate"),
-                Obstacle(850, 650, 128, 128, "scifi_crate"),
+                Obstacle(360, 240, 128, 128, "scifi_crate"),
+                Obstacle(1048, 240, 128, 128, "scifi_crate"),
+                Obstacle(704, 352, 128, 128, "scifi_crate"),
+                Obstacle(360, 600, 128, 128, "scifi_crate"),
+                Obstacle(1048, 600, 128, 128, "scifi_crate"),
+            ])
+            room.obstacles.extend([
+                Obstacle(540, 226, 54, 54, "tire"),
+                Obstacle(540, 268, 54, 54, "tire"),
+                Obstacle(928, 226, 54, 54, "tire"),
+                Obstacle(928, 268, 54, 54, "tire"),
             ])
             conduit = Conduit(conduit_pos[0], conduit_pos[1], len(self.all_conduits) + 1)
             room.interactables.append(conduit)
@@ -273,12 +292,22 @@ class LevelData:
         lab_sector = self._create_room("lab_sector", "Research Labs", (760, 800))
         cargo_bay = self._create_room("cargo_bay", "Cargo Storage", (200, 200))
 
-        # Core checkpoint filled with server blocks for cover
+        # Checkpoint creates alternating lanes that force movement timing
         main.obstacles.extend([
-            Obstacle(300, 200, 96, 256, "scifi_server"),
-            Obstacle(300, 560, 96, 256, "scifi_server"),
-            Obstacle(900, 400, 192, 96, "scifi_server"),
-            Obstacle(1150, 400, 192, 96, "scifi_server"),
+            Obstacle(264, 176, 96, 288, "scifi_server"),
+            Obstacle(264, 528, 96, 288, "scifi_server"),
+            Obstacle(672, 320, 224, 96, "scifi_server"),
+            Obstacle(672, 544, 224, 96, "scifi_server"),
+            Obstacle(1088, 208, 96, 224, "scifi_server"),
+            Obstacle(1088, 480, 96, 224, "scifi_server"),
+        ])
+        main.obstacles.extend([
+            Obstacle(430, 188, 56, 56, "tire"),
+            Obstacle(430, 230, 56, 56, "tire"),
+            Obstacle(430, 272, 56, 56, "tire"),
+            Obstacle(924, 632, 56, 56, "tire"),
+            Obstacle(924, 674, 56, 56, "tire"),
+            Obstacle(924, 716, 56, 56, "tire"),
         ])
         main.enemies.extend([
             self._spawn_enemy("patrol", 600, 218),
@@ -288,13 +317,24 @@ class LevelData:
         ])
         main.message_fragments.append(MessageFragment(132, 552, "Fragment 2/3: WARNING. All security drones hijacked. Core overrides initiated by ... [CORRUPTED]"))
 
-        # Complex cargo bay maze
+        # Cargo bay is shaped as a staggered box maze with tight peeking angles
         cargo_bay.obstacles.extend([
-            Obstacle(500, 300, 128, 128, "scifi_crate"),
-            Obstacle(628, 300, 128, 128, "scifi_crate"),
-            Obstacle(500, 428, 128, 128, "scifi_crate"),
-            Obstacle(1000, 150, 128, 128, "scifi_crate"),
-            Obstacle(1128, 500, 128, 128, "scifi_crate"),
+            Obstacle(424, 232, 128, 128, "scifi_crate"),
+            Obstacle(552, 232, 128, 128, "scifi_crate"),
+            Obstacle(680, 232, 128, 128, "scifi_crate"),
+            Obstacle(552, 360, 128, 128, "scifi_crate"),
+            Obstacle(808, 488, 128, 128, "scifi_crate"),
+            Obstacle(936, 488, 128, 128, "scifi_crate"),
+            Obstacle(1064, 488, 128, 128, "scifi_crate"),
+            Obstacle(1064, 232, 128, 128, "scifi_crate"),
+        ])
+        cargo_bay.obstacles.extend([
+            Obstacle(356, 508, 54, 54, "tire"),
+            Obstacle(356, 550, 54, 54, "tire"),
+            Obstacle(356, 592, 54, 54, "tire"),
+            Obstacle(1238, 250, 54, 54, "tire"),
+            Obstacle(1238, 292, 54, 54, "tire"),
+            Obstacle(1238, 334, 54, 54, "tire"),
         ])
         switch_1 = SequenceSwitch(1300, 600, 1)
         switch_1.allowed = True
@@ -312,6 +352,12 @@ class LevelData:
         lab_sector.walls.extend([
             pygame.Rect(400, 400, 600, 40),
             pygame.Rect(680, 200, 40, 200),
+        ])
+        lab_sector.obstacles.extend([
+            Obstacle(520, 246, 52, 52, "tire"),
+            Obstacle(520, 286, 52, 52, "tire"),
+            Obstacle(950, 508, 52, 52, "tire"),
+            Obstacle(950, 548, 52, 52, "tire"),
         ])
         switch_3 = SequenceSwitch(800, 700, 3)
         switch_3.allowed = True
@@ -348,12 +394,21 @@ class LevelData:
         array_field = self._create_room("array_field", "Antenna Field", (172, 518))
         command_core = self._create_room("command_core", "Command Core", (760, 800))
 
-        # Massive staggered antenna field barricaded by huge servers blocking direct movement
+        # Antenna field now funnels movement through offset pockets and long sightlines
         array_field.obstacles.extend([
-            Obstacle(300, 300, 96, 256, "scifi_server"),
-            Obstacle(800, 400, 256, 96, "scifi_server"),
-            Obstacle(1100, 100, 96, 256, "scifi_server"),
-            Obstacle(1100, 600, 96, 128, "scifi_server"),
+            Obstacle(288, 224, 96, 256, "scifi_server"),
+            Obstacle(544, 560, 224, 96, "scifi_server"),
+            Obstacle(768, 224, 256, 96, "scifi_server"),
+            Obstacle(992, 448, 96, 256, "scifi_server"),
+            Obstacle(1216, 176, 96, 224, "scifi_server"),
+        ])
+        array_field.obstacles.extend([
+            Obstacle(458, 164, 58, 58, "tire"),
+            Obstacle(458, 206, 58, 58, "tire"),
+            Obstacle(458, 248, 58, 58, "tire"),
+            Obstacle(1144, 600, 58, 58, "tire"),
+            Obstacle(1144, 642, 58, 58, "tire"),
+            Obstacle(1144, 684, 58, 58, "tire"),
         ])
         array_field.interactables = [
             Antenna(200, 150, 1),
@@ -379,13 +434,24 @@ class LevelData:
             )
         ]
 
-        # The core is a massive arena separated by crate clusters against Boss attacks
+        # Command core becomes a broken ring with center pressure
         command_core.obstacles.extend([
-            Obstacle(300, 200, 128, 128, "scifi_crate"),
-            Obstacle(300, 600, 128, 128, "scifi_crate"),
-            Obstacle(1100, 200, 128, 128, "scifi_crate"),
-            Obstacle(1100, 600, 128, 128, "scifi_crate"),
-            Obstacle(700, 400, 128, 128, "scifi_crate"),
+            Obstacle(264, 184, 128, 128, "scifi_crate"),
+            Obstacle(264, 560, 128, 128, "scifi_crate"),
+            Obstacle(520, 344, 128, 128, "scifi_crate"),
+            Obstacle(1000, 344, 128, 128, "scifi_crate"),
+            Obstacle(1144, 184, 128, 128, "scifi_crate"),
+            Obstacle(1144, 560, 128, 128, "scifi_crate"),
+            Obstacle(704, 248, 128, 128, "scifi_crate"),
+            Obstacle(704, 504, 128, 128, "scifi_crate"),
+        ])
+        command_core.obstacles.extend([
+            Obstacle(436, 186, 60, 60, "tire"),
+            Obstacle(436, 230, 60, 60, "tire"),
+            Obstacle(436, 274, 60, 60, "tire"),
+            Obstacle(1028, 578, 60, 60, "tire"),
+            Obstacle(1028, 622, 60, 60, "tire"),
+            Obstacle(1028, 666, 60, 60, "tire"),
         ])
         command_core.doors = []
         command_core.spawn_points = [
