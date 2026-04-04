@@ -33,6 +33,9 @@ class Game:
         self.interact_pressed = False
         self.message = ""
         self.message_timer = 0.0
+        self.life_lost_modal_active = False
+        self.life_lost_tries_left = 0
+        self.pending_restore_boss_checkpoint = False
 
         self.loading_timer = 0.0
         self.loading_duration = 1.2
@@ -78,6 +81,9 @@ class Game:
         self.transition_final = False
         self.fragment_modal_active = False
         self.fragment_modal_text = ""
+        self.life_lost_modal_active = False
+        self.life_lost_tries_left = 0
+        self.pending_restore_boss_checkpoint = False
         if show_loading:
             self.loading_title = loading_title or f"LEVEL {level_id}"
             self.loading_duration = loading_duration
@@ -113,6 +119,9 @@ class Game:
         self.message_timer = 0.0
         self.fragment_modal_active = False
         self.fragment_modal_text = ""
+        self.life_lost_modal_active = False
+        self.life_lost_tries_left = 0
+        self.pending_restore_boss_checkpoint = False
         self.ending.reset()
         self.bullets.clear()
         self.enemy_bullets.clear()
@@ -166,25 +175,37 @@ class Game:
 
     def handle_player_death(self) -> None:
         if self.lives_left > 1:
-            should_restore_boss_checkpoint = (
+            self.pending_restore_boss_checkpoint = (
                 self.current_level_id == 3
                 and self.level is not None
                 and self.level.current_room_id == "command_core"
             )
-
             self.lives_left -= 1
-            self.load_level(self.current_level_id, show_loading=False)
-
-            if should_restore_boss_checkpoint and self.level is not None and self.player is not None:
-                self.level.activate_final_boss_checkpoint(self.player)
-
-            self.state.set_playing()
-            self.message = "Life lost"
-            self.message_timer = 1.4
+            self.life_lost_tries_left = self.lives_left
+            self.life_lost_modal_active = True
+            self.interact_held = False
+            self.interact_pressed = False
+            self.message = ""
+            self.message_timer = 0.0
             return
 
         self.lives_left = 0
         self.state.set_game_over()
+
+    def continue_after_life_lost(self) -> None:
+        if not self.life_lost_modal_active:
+            return
+
+        should_restore_boss_checkpoint = self.pending_restore_boss_checkpoint
+        self.load_level(self.current_level_id, show_loading=False)
+
+        if should_restore_boss_checkpoint and self.level is not None and self.player is not None:
+            self.level.activate_final_boss_checkpoint(self.player)
+
+        self.life_lost_modal_active = False
+        self.life_lost_tries_left = 0
+        self.pending_restore_boss_checkpoint = False
+        self.state.set_playing()
 
     def next_level(self) -> None:
         if self.current_level_id < 3:
@@ -196,6 +217,15 @@ class Game:
         return button_rect.collidepoint(mouse_pos)
 
     def handle_event(self, event: pygame.event.Event) -> None:
+        if self.life_lost_modal_active:
+            if event.type == pygame.KEYDOWN and event.key in (pygame.K_RETURN, pygame.K_SPACE):
+                self.continue_after_life_lost()
+            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                ok_rect = self.ui.get_life_lost_modal_ok_button()
+                if self.check_button_click(event.pos, ok_rect):
+                    self.continue_after_life_lost()
+            return
+
         if self.fragment_modal_active:
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 ok_rect = self.ui.get_fragment_modal_ok_button()
@@ -320,6 +350,10 @@ class Game:
             return
 
         if self.fragment_modal_active:
+            self.interact_pressed = False
+            return
+
+        if self.life_lost_modal_active:
             self.interact_pressed = False
             return
 
@@ -525,3 +559,6 @@ class Game:
 
         if self.fragment_modal_active:
             self.ui.draw_fragment_modal(self.screen, self.fragment_modal_text)
+
+        if self.life_lost_modal_active:
+            self.ui.draw_life_lost_modal(self.screen, self.life_lost_tries_left)

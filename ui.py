@@ -611,6 +611,9 @@ class UI:
     def get_fragment_modal_ok_button(self) -> pygame.Rect:
         return pygame.Rect(SCREEN_WIDTH // 2 - 90, SCREEN_HEIGHT // 2 + 170, 180, 48)
 
+    def get_life_lost_modal_ok_button(self) -> pygame.Rect:
+        return pygame.Rect(SCREEN_WIDTH // 2 - 90, SCREEN_HEIGHT // 2 + 118, 180, 48)
+
     def draw_panel_text(self, surface: pygame.Surface, text: str, x: int, y: int, color=WHITE) -> None:
         img = self.font_small.render(text, True, color)
         surface.blit(img, (x, y))
@@ -932,6 +935,31 @@ class UI:
 
         ok_rect = self.get_fragment_modal_ok_button()
         self._draw_button(surface, ok_rect, "OK")
+
+    def draw_life_lost_modal(self, surface: pygame.Surface, tries_left: int) -> None:
+        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 210))
+        surface.blit(overlay, (0, 0))
+
+        panel = pygame.Rect(SCREEN_WIDTH // 2 - 340, SCREEN_HEIGHT // 2 - 165, 680, 330)
+        self._draw_cyber_panel(surface, panel)
+
+        title = self.font_large.render("UNIT DESTROYED", True, RED)
+        surface.blit(title, title.get_rect(center=(SCREEN_WIDTH // 2, panel.top + 62)))
+
+        if tries_left == 1:
+            status_text = "You still have 1 more try left."
+        else:
+            status_text = f"You still have {tries_left} more tries left."
+
+        msg = self.font_medium.render(status_text, True, WHITE)
+        surface.blit(msg, msg.get_rect(center=(SCREEN_WIDTH // 2, panel.top + 146)))
+
+        hint = self.font_small.render("Press Proceed to restart this level.", True, (180, 205, 220))
+        surface.blit(hint, hint.get_rect(center=(SCREEN_WIDTH // 2, panel.top + 192)))
+
+        ok_rect = self.get_life_lost_modal_ok_button()
+        self._draw_button(surface, ok_rect, "Proceed")
 
     def draw_level_transition(self, surface: pygame.Surface, progress: float) -> None:
         overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
