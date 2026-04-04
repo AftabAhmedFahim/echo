@@ -351,7 +351,10 @@ class Game:
                 pygame.draw.line(self.screen, GRID, (0, y), (SCREEN_WIDTH, y))
             return
 
-        self.screen.blit(self.visual_assets.get_level_background(self.current_level_id), (0, 0))
+        self.screen.blit(
+            self.visual_assets.get_level_background(self.current_level_id, self.level.current_room_id),
+            (0, 0),
+        )
 
     def draw(self) -> None:
         self.draw_background()

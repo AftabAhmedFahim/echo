@@ -605,7 +605,7 @@ class LevelData:
                 continue
 
             if isinstance(obj, Antenna):
-                triggered = obj.interact(dt, False)
+                triggered = obj.interact(dt, holding)
                 if triggered:
                     activated_count = sum(1 for antenna in self.all_antennas if antenna.completed)
                     self._start_antenna_wave(activated_count)
@@ -615,7 +615,7 @@ class LevelData:
             if isinstance(obj, SequenceSwitch):
                 if not holding:
                     continue
-                triggered = obj.interact(dt, False)
+                triggered = obj.interact(dt, holding)
                 if triggered and self.all_switches_active():
                     self._status_message = "All switches active. Final gate unlocked."
                 if triggered:
@@ -633,7 +633,7 @@ class LevelData:
                 continue
 
             if holding:
-                triggered = obj.interact(dt, False)
+                triggered = obj.interact(dt, holding)
                 if triggered:
                     return True, None
 

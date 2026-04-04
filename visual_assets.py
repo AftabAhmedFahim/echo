@@ -8,7 +8,7 @@ from settings import SCREEN_WIDTH, SCREEN_HEIGHT
 
 class VisualAssets:
     def __init__(self):
-        self._background_cache: dict[int, pygame.Surface] = {}
+        self._background_cache: dict[object, pygame.Surface] = {}
         self._animation_cache: dict[str, dict[str, AnimationClip]] = {}
 
         self.background_files = {
@@ -16,29 +16,29 @@ class VisualAssets:
             2: "assets/backgrounds/level_2.png",
             3: "assets/backgrounds/level_3.png",
         }
+        self.room_background_files = {
+            (3, "command_core"): "assets/backgrounds/level_3_boss.png",
+        }
         self.base_entity_files = {
             "player": "assets/sprites/player.png",
             "drone": "assets/sprites/drone.png",
         }
 
-    def get_level_background(self, level_id: int) -> pygame.Surface:
-        if level_id not in self._background_cache:
-            floor_tile = self._load_image("assets/backgrounds/space_station_floor.png", None)
-            background = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
-            if floor_tile:
-                tile_w, tile_h = floor_tile.get_size()
-                # Scale up floor tile specifically for 1.2 resolution to look chunky and dense
-                new_size = (int(tile_w * 0.5), int(tile_h * 0.5))
-                floor_tile = pygame.transform.scale(floor_tile, new_size)
-                tile_w, tile_h = floor_tile.get_size()
-                
-                for x in range(0, SCREEN_WIDTH, tile_w):
-                    for y in range(0, SCREEN_HEIGHT, tile_h):
-                        background.blit(floor_tile, (x, y))
+    def get_level_background(self, level_id: int, room_id: str | None = None) -> pygame.Surface:
+        cache_key = (level_id, room_id or "")
+        if cache_key not in self._background_cache:
+            # Room-specific background overrides level defaults (used for Level 3 final boss room).
+            image_path = self.room_background_files.get((level_id, room_id or ""))
+            if image_path is None:
+                image_path = self.background_files.get(level_id, "")
+
+            image = self._load_image(image_path, (SCREEN_WIDTH, SCREEN_HEIGHT))
+            if image is not None:
+                self._background_cache[cache_key] = image
             else:
-                background = self._build_fallback_background(level_id)
-            self._background_cache[level_id] = background
-        return self._background_cache[level_id]
+                self._background_cache[cache_key] = self._build_fallback_background(level_id)
+
+        return self._background_cache[cache_key]
 
     def get_wall_texture(self) -> pygame.Surface:
         if "wall_texture" not in self._background_cache:
