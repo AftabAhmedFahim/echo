@@ -105,8 +105,9 @@ class VisualAssets:
     def get_prop_texture(self, texture_id: str) -> pygame.Surface | None:
         cache_key = f"prop_{texture_id}"
         if cache_key not in self._background_cache:
-            path = f"assets/props/{texture_id}.png"
-            image = self._load_image(path)
+            image = self._load_image(f"assets/props/{texture_id}.png")
+            if image is None:
+                image = self._load_image(f"assets/{texture_id}.png")
             if image:
                 self._background_cache[cache_key] = image
             else:

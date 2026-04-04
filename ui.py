@@ -16,6 +16,16 @@ class UI:
         self.font_medium = pygame.font.Font(None, 36)
         self.font_large  = pygame.font.Font(None, 62)
         self.font_title  = pygame.font.Font(None, 96)
+        self.heart_icon = self._load_heart_icon()
+
+    def _load_heart_icon(self) -> pygame.Surface | None:
+        try:
+            icon = pygame.image.load("assets/heart.png").convert_alpha()
+            return pygame.transform.smoothscale(icon, (20, 20))
+        except pygame.error:
+            return None
+        except FileNotFoundError:
+            return None
 
     def _draw_button(self, surface: pygame.Surface, rect: pygame.Rect, text: str, highlight: bool = False) -> None:
         mouse_pos = pygame.mouse.get_pos()
@@ -125,12 +135,32 @@ class UI:
         self.draw_panel_text(surface, f"HP: {current}/{maximum}", x + 8, y + 2)
 
     def draw_lives(self, surface: pygame.Surface, current: int, maximum: int) -> None:
+        max_lives = min(3, max(0, maximum))
+        lives_left = max(0, min(current, max_lives))
+
         x, y = SCREEN_WIDTH - 280, 20
-        pygame.draw.rect(surface, PANEL, (x, y, 260, 24), border_radius=4)
-        pygame.draw.rect(surface, WHITE, (x, y, 260, 24), 2, border_radius=4)
-        hearts = " ".join(["♥"] * max(0, current))
-        text = self.font_small.render(f"Lives: {hearts}", True, RED)
-        surface.blit(text, (x + 10, y + 2))
+        pygame.draw.rect(surface, PANEL, (x, y, 260, 30), border_radius=4)
+        pygame.draw.rect(surface, WHITE, (x, y, 260, 30), 2, border_radius=4)
+
+        label = self.font_small.render("Lives:", True, WHITE)
+        surface.blit(label, (x + 10, y + 5))
+
+        start_x = x + 80
+        for i in range(max_lives):
+            heart_x = start_x + i * 34
+            heart_y = y + 5
+
+            if self.heart_icon is not None:
+                heart = self.heart_icon.copy()
+                if i >= lives_left:
+                    heart.fill((70, 70, 70, 190), special_flags=pygame.BLEND_RGBA_MULT)
+                surface.blit(heart, (heart_x, heart_y))
+            else:
+                # Fallback if image loading fails.
+                color = RED if i < lives_left else (90, 90, 90)
+                pygame.draw.circle(surface, color, (heart_x + 8, heart_y + 8), 7)
+                pygame.draw.circle(surface, color, (heart_x + 14, heart_y + 8), 7)
+                pygame.draw.polygon(surface, color, [(heart_x + 2, heart_y + 11), (heart_x + 20, heart_y + 11), (heart_x + 11, heart_y + 20)])
 
     def draw_objective(self, surface: pygame.Surface, level_name: str, objective: str) -> None:
         title = self.font_medium.render(level_name, True, WHITE)
