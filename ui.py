@@ -339,6 +339,161 @@ class IntroSequence:
             pygame.draw.ellipse(surface, accent, (cx + 28, cy - 10, 28, 40), 2)
             pygame.draw.line(surface, accent, (cx + 42, cy - 10), (cx + 42, cy + 6), 2)
 
+class EndingSequence:
+    """Stylized post-boss cinematic ending scene."""
+
+    def __init__(self):
+        self.timer = 0.0
+
+    def reset(self) -> None:
+        self.timer = 0.0
+
+    def update(self, dt: float) -> None:
+        self.timer = min(self.timer + dt, 12.0)
+
+    @staticmethod
+    def _clamp01(value: float) -> float:
+        return max(0.0, min(1.0, value))
+
+    @staticmethod
+    def _lerp_color(a: tuple[int, int, int], b: tuple[int, int, int], t: float) -> tuple[int, int, int]:
+        t = max(0.0, min(1.0, t))
+        return (
+            int(a[0] + (b[0] - a[0]) * t),
+            int(a[1] + (b[1] - a[1]) * t),
+            int(a[2] + (b[2] - a[2]) * t),
+        )
+
+    def draw(self, surface: pygame.Surface, ui: "UI") -> None:
+        t = self.timer
+        disarm_progress = self._clamp01((t - 1.6) / 2.2)
+        light_recover = self._clamp01((t - 4.0) / 2.2)
+        closeup_progress = self._clamp01((t - 6.2) / 2.4)
+
+        alarm_flash = 0.45 + 0.55 * (0.5 + 0.5 * math.sin(t * 7.8))
+        light_color = self._lerp_color((255, 48, 40), (70, 220, 130), light_recover)
+        scene = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+
+        # Atmospheric deep-space station gradient.
+        for y in range(SCREEN_HEIGHT):
+            y_ratio = y / max(1, SCREEN_HEIGHT - 1)
+            top = (10, 16, 26)
+            bottom = (28, 34, 42)
+            c = self._lerp_color(top, bottom, y_ratio)
+            scene.fill(c, rect=(0, y, SCREEN_WIDTH, 1))
+
+        # Corridor perspective walls.
+        left_wall = [(0, 0), (SCREEN_WIDTH * 0.32, SCREEN_HEIGHT * 0.18), (SCREEN_WIDTH * 0.40, SCREEN_HEIGHT), (0, SCREEN_HEIGHT)]
+        right_wall = [(SCREEN_WIDTH, 0), (SCREEN_WIDTH * 0.68, SCREEN_HEIGHT * 0.18), (SCREEN_WIDTH * 0.60, SCREEN_HEIGHT), (SCREEN_WIDTH, SCREEN_HEIGHT)]
+        pygame.draw.polygon(scene, (20, 28, 36), left_wall)
+        pygame.draw.polygon(scene, (20, 28, 36), right_wall)
+
+        floor = pygame.Rect(0, int(SCREEN_HEIGHT * 0.57), SCREEN_WIDTH, int(SCREEN_HEIGHT * 0.43))
+        pygame.draw.rect(scene, (26, 34, 44), floor)
+
+        # Red emergency lights transitioning to green.
+        strip_alpha = int(85 + (120 * alarm_flash * (1.0 - light_recover)))
+        for x in range(0, SCREEN_WIDTH, 96):
+            strip = pygame.Surface((64, 18), pygame.SRCALPHA)
+            strip.fill((*light_color, min(220, strip_alpha + 25)))
+            scene.blit(strip, (x + 16, 28))
+        hall_glow = pygame.Surface((SCREEN_WIDTH, 240), pygame.SRCALPHA)
+        hall_glow.fill((*light_color, int(45 + 80 * (1.0 - light_recover) * alarm_flash)))
+        scene.blit(hall_glow, (0, 80))
+
+        # Defeated villain in the background (eyes powered down).
+        villain_x = int(SCREEN_WIDTH * 0.70)
+        villain_y = int(SCREEN_HEIGHT * 0.42)
+        pygame.draw.rect(scene, (36, 42, 52), (villain_x - 80, villain_y - 60, 160, 120), border_radius=16)
+        pygame.draw.rect(scene, (28, 34, 42), (villain_x - 52, villain_y + 54, 104, 86), border_radius=14)
+        eye_alpha = int(190 * (1.0 - light_recover))
+        if eye_alpha > 8:
+            for ox in (-28, 28):
+                eye = pygame.Surface((26, 14), pygame.SRCALPHA)
+                eye.fill((255, 35, 35, eye_alpha))
+                scene.blit(eye, (villain_x + ox - 13, villain_y - 20))
+        else:
+            for ox in (-28, 28):
+                pygame.draw.rect(scene, (32, 32, 36), (villain_x + ox - 13, villain_y - 20, 26, 14), border_radius=3)
+
+        # Main robot protagonist.
+        px = int(SCREEN_WIDTH * 0.44)
+        py = int(SCREEN_HEIGHT * 0.67)
+        body_col = (94, 120, 142)
+        edge_col = (160, 188, 210)
+        damage_tint = (130, 90, 90)
+        body = pygame.Rect(px - 44, py - 68, 88, 116)
+        pygame.draw.rect(scene, self._lerp_color(body_col, damage_tint, 0.22), body, border_radius=18)
+        pygame.draw.rect(scene, edge_col, body, 2, border_radius=18)
+
+        # Legs and support frame.
+        pygame.draw.rect(scene, (78, 95, 110), (px - 34, py + 36, 24, 68), border_radius=8)
+        pygame.draw.rect(scene, (78, 95, 110), (px + 10, py + 36, 24, 68), border_radius=8)
+
+        # Head/monitor with gradual downward look.
+        head_drop = int(8 * disarm_progress)
+        head = pygame.Rect(px - 50, py - 126 + head_drop, 100, 68)
+        pygame.draw.rect(scene, (80, 104, 122), head, border_radius=10)
+        pygame.draw.rect(scene, edge_col, head, 2, border_radius=10)
+        face = pygame.Rect(head.x + 12, head.y + 12, head.width - 24, head.height - 24)
+        pygame.draw.rect(scene, (18, 28, 34), face, border_radius=6)
+
+        # Left arm lowered as the fight ends.
+        shoulder = pygame.Vector2(px + 34, py - 26)
+        weapon_angle = -0.35 + 1.25 * disarm_progress
+        elbow = shoulder + pygame.Vector2(math.cos(weapon_angle) * 34, math.sin(weapon_angle) * 34)
+        gun_tip = elbow + pygame.Vector2(math.cos(weapon_angle) * 54, math.sin(weapon_angle) * 54)
+        pygame.draw.line(scene, (146, 172, 190), shoulder, elbow, 8)
+        pygame.draw.line(scene, (126, 146, 164), elbow, gun_tip, 9)
+        pygame.draw.circle(scene, (165, 188, 205), (int(shoulder.x), int(shoulder.y)), 9)
+        pygame.draw.circle(scene, (150, 172, 192), (int(elbow.x), int(elbow.y)), 8)
+
+        # Sparks while recovering from battle damage.
+        if t < 4.5:
+            for i in range(8):
+                sx = px - 12 + i * 6 + math.sin(t * 10 + i) * 10
+                sy = py - 78 + math.cos(t * 8 + i * 0.6) * 16
+                spark = pygame.Surface((3, 3), pygame.SRCALPHA)
+                spark.fill((255, 210, 120, int(170 * (1.0 - t / 4.5))))
+                scene.blit(spark, (sx, sy))
+
+        # Camera pushes in to the protagonist face near the end.
+        if closeup_progress > 0:
+            zoom = 1.0 + 0.28 * closeup_progress
+            scaled_w = int(SCREEN_WIDTH * zoom)
+            scaled_h = int(SCREEN_HEIGHT * zoom)
+            zoomed = pygame.transform.smoothscale(scene, (scaled_w, scaled_h))
+            focus_x = int((px + 6) * zoom)
+            focus_y = int((py - 95) * zoom)
+            src_x = max(0, min(scaled_w - SCREEN_WIDTH, focus_x - SCREEN_WIDTH // 2))
+            src_y = max(0, min(scaled_h - SCREEN_HEIGHT, focus_y - SCREEN_HEIGHT // 2))
+            surface.blit(zoomed, (0, 0), area=pygame.Rect(src_x, src_y, SCREEN_WIDTH, SCREEN_HEIGHT))
+        else:
+            surface.blit(scene, (0, 0))
+
+        # Final monitor text.
+        if closeup_progress > 0.15:
+            pulse = 0.65 + 0.35 * math.sin(t * 3.2)
+            mission_col = (int(100 + 120 * pulse), 255, int(140 + 60 * pulse))
+            mission = ui.font_small.render("Mission: SUCCESS", True, mission_col)
+            surface.blit(mission, mission.get_rect(center=(px + 2, py - 88 + head_drop)))
+
+        # Cinematic bars and captions.
+        bar_h = 54
+        pygame.draw.rect(surface, (0, 0, 0), (0, 0, SCREEN_WIDTH, bar_h))
+        pygame.draw.rect(surface, (0, 0, 0), (0, SCREEN_HEIGHT - bar_h, SCREEN_WIDTH, bar_h))
+
+        if t < 3.6:
+            caption = "Threat neutralized. Weapon systems powering down."
+        elif t < 6.2:
+            caption = "Audible servo exhale detected. Emergency status recovering."
+        else:
+            caption = "Station secure. Mission status: SUCCESS."
+
+        cap = ui.font_small.render(caption, True, (225, 235, 245))
+        surface.blit(cap, cap.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 28)))
+        hint = ui.font_small.render("Press ESC to quit.", True, (180, 198, 212))
+        surface.blit(hint, hint.get_rect(center=(SCREEN_WIDTH // 2, 28)))
 
 
 class UI:
@@ -503,11 +658,61 @@ class UI:
         surface.blit(obj, (20, 96))
 
     def draw_prompt(self, surface: pygame.Surface, text: str) -> None:
-        box = pygame.Rect(SCREEN_WIDTH // 2 - 160, SCREEN_HEIGHT - 70, 320, 40)
+        if not text:
+            return
+
+        max_width = min(760, SCREEN_WIDTH - 60)
+        pad_x = 14
+        pad_y = 9
+        line_gap = 3
+        line_height = self.font_small.get_height()
+
+        def wrap_prompt_lines(raw: str, width: int) -> list[str]:
+            lines: list[str] = []
+            current = ""
+            for word in raw.split():
+                probe = f"{current} {word}".strip()
+                if self.font_small.size(probe)[0] <= width:
+                    current = probe
+                    continue
+                if current:
+                    lines.append(current)
+                    current = word
+                else:
+                    lines.append(word)
+                    current = ""
+            if current:
+                lines.append(current)
+            return lines if lines else [raw]
+
+        lines = wrap_prompt_lines(text, max_width - pad_x * 2)
+
+        # Keep prompt compact near the bottom.
+        max_lines = 3
+        if len(lines) > max_lines:
+            lines = lines[:max_lines]
+            while self.font_small.size(lines[-1] + "...")[0] > (max_width - pad_x * 2) and lines[-1]:
+                lines[-1] = lines[-1][:-1]
+            lines[-1] = (lines[-1] + "...") if lines[-1] else "..."
+
+        content_width = max(self.font_small.size(line)[0] for line in lines)
+        box_width = min(max_width, max(320, content_width + pad_x * 2))
+        box_height = pad_y * 2 + len(lines) * line_height + (len(lines) - 1) * line_gap
+
+        box = pygame.Rect(
+            (SCREEN_WIDTH - box_width) // 2,
+            SCREEN_HEIGHT - box_height - 22,
+            box_width,
+            box_height,
+        )
         pygame.draw.rect(surface, PANEL, box, border_radius=8)
         pygame.draw.rect(surface, WHITE, box, 2, border_radius=8)
-        txt = self.font_small.render(text, True, WHITE)
-        surface.blit(txt, (box.x + 15, box.y + 10))
+
+        y = box.y + pad_y
+        for line in lines:
+            txt = self.font_small.render(line, True, WHITE)
+            surface.blit(txt, (box.x + pad_x, y))
+            y += line_height + line_gap
 
     def _draw_menu_background(self, surface: pygame.Surface) -> None:
         """Dark gradient background with subtle hex-grid scanlines."""
@@ -774,7 +979,11 @@ class UI:
         surface.blit(info, info.get_rect(center=(SCREEN_WIDTH // 2, 350)))
         surface.blit(sub, sub.get_rect(center=(SCREEN_WIDTH // 2, 395)))
 
-    def draw_ending(self, surface: pygame.Surface) -> None:
+    def draw_ending(self, surface: pygame.Surface, ending_sequence: EndingSequence | None = None) -> None:
+        if ending_sequence is not None:
+            ending_sequence.draw(surface, self)
+            return
+
         title = self.font_large.render("BROADCAST COMPLETE", True, GREEN)
         info = self.font_medium.render("ECHO restored the network.", True, WHITE)
         sub = self.font_small.render("Press ESC to quit.", True, WHITE)

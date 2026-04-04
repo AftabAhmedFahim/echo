@@ -645,6 +645,28 @@ class LevelData:
         self.boss_support_timer = 4.5
         self._status_message = "Core guardian deployed. Survive and destroy it."
 
+    def activate_final_boss_checkpoint(self, player) -> None:
+        """Jump directly to the Level 3 command core boss encounter."""
+        if self.level_id != 3:
+            return
+
+        self.array_assault_started = True
+        self.command_door_unlocked = True
+        self.active_spawners.clear()
+        for antenna in self.all_antennas:
+            antenna.completed = True
+
+        self.current_room_id = "command_core"
+        room = self.current_room
+        player.pos = room.spawn_point.copy()
+        self.player_spawn = room.spawn_point.copy()
+
+        self.portal = None
+        self.portal_active = False
+        self._portal_spawned = False
+
+        self._on_room_enter("command_core")
+
     def _start_antenna_wave(self, activated_count: int) -> None:
         if activated_count == 1:
             self.start_wave(

@@ -4,7 +4,7 @@ from player import Player
 from projectiles import Bullet, EnemyBullet
 from enemies import InterceptorDrone
 from level_manager import LevelData
-from ui import UI, IntroSequence
+from ui import UI, IntroSequence, EndingSequence
 from audio import AudioManager
 from state_manager import StateManager
 from visual_assets import VisualAssets
@@ -44,6 +44,7 @@ class Game:
 
         # Story intro sequence (shown before the very first level)
         self.intro = IntroSequence()
+        self.ending = EndingSequence()
 
         self.load_level(self.current_level_id)
 
@@ -67,6 +68,7 @@ class Game:
             self.visual_assets.get_player_animations(),
         )
         self.bullets.clear()
+        self.enemy_bullets.clear()
         self.message = ""
         self.message_timer = 0.0
         self.interact_held = False
@@ -111,6 +113,7 @@ class Game:
         self.message_timer = 0.0
         self.fragment_modal_active = False
         self.fragment_modal_text = ""
+        self.ending.reset()
         self.bullets.clear()
         self.enemy_bullets.clear()
 
@@ -145,7 +148,9 @@ class Game:
 
     def finish_level_transition(self) -> None:
         if self.transition_final or self.transition_target_level is None:
+            self.ending.reset()
             self.state.set_ending()
+            self.audio.play_ending_sigh()
         else:
             self.load_level(
                 self.transition_target_level,
@@ -161,8 +166,18 @@ class Game:
 
     def handle_player_death(self) -> None:
         if self.lives_left > 1:
+            should_restore_boss_checkpoint = (
+                self.current_level_id == 3
+                and self.level is not None
+                and self.level.current_room_id == "command_core"
+            )
+
             self.lives_left -= 1
             self.load_level(self.current_level_id, show_loading=False)
+
+            if should_restore_boss_checkpoint and self.level is not None and self.player is not None:
+                self.level.activate_final_boss_checkpoint(self.player)
+
             self.state.set_playing()
             self.message = "Life lost"
             self.message_timer = 1.4
@@ -297,6 +312,11 @@ class Game:
             self.transition_timer -= dt
             if self.transition_timer <= 0:
                 self.finish_level_transition()
+            return
+
+        if self.state.is_ending():
+            self.ending.update(dt)
+            self.interact_pressed = False
             return
 
         if self.fragment_modal_active:
@@ -450,6 +470,10 @@ class Game:
             self.ui.draw_controls(self.screen)
             return
 
+        if self.state.is_ending():
+            self.ui.draw_ending(self.screen, self.ending)
+            return
+
         assert self.level is not None
         assert self.player is not None
 
@@ -486,9 +510,6 @@ class Game:
 
         if self.state.is_pause():
             self.ui.draw_pause(self.screen, self.audio.music_enabled)
-
-        if self.state.is_ending():
-            self.ui.draw_ending(self.screen)
 
         if self.state.is_transition():
             progress = 1.0 - (self.transition_timer / max(0.001, self.transition_duration))
