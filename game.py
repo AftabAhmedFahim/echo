@@ -1,7 +1,7 @@
 import pygame
 
 from player import Player
-from projectiles import Bullet
+from projectiles import Bullet, EnemyBullet
 from enemies import InterceptorDrone
 from level_manager import LevelData
 from ui import UI
@@ -28,6 +28,7 @@ class Game:
         self.level: LevelData | None = None
         self.player: Player | None = None
         self.bullets: list[Bullet] = []
+        self.enemy_bullets: list[EnemyBullet] = []
         self.interact_held = False
         self.interact_pressed = False
         self.message = ""
@@ -227,9 +228,10 @@ class Game:
             if self.state.is_playing() and self.player and not self.player.is_dead:
                 if self.loading_timer > 0:
                     return
-                bullet_data = self.player.shoot()
-                if bullet_data:
-                    self.bullets.append(Bullet(**bullet_data))
+                bullet_list = self.player.shoot()
+                if bullet_list:
+                    for b_data in bullet_list:
+                        self.bullets.append(Bullet(**b_data))
                     self.audio.play("shoot")
 
     def update(self, dt: float) -> None:
@@ -268,6 +270,7 @@ class Game:
             return
         if changed_room:
             self.bullets.clear()
+            self.enemy_bullets.clear()
             self.interact_pressed = False
             return
 
@@ -288,8 +291,21 @@ class Game:
         for bullet in self.bullets:
             bullet.update(dt, self.level.walls, self.screen_rect)
 
+        for bullet in self.enemy_bullets:
+            bullet.update(dt, self.level.walls, self.screen_rect)
+            if bullet.rect.colliderect(self.player.rect):
+                bullet.alive = False
+                self.player.take_damage(bullet.damage)
+                self.audio.play("hit")
+
+        self.enemy_bullets = [b for b in self.enemy_bullets if b.alive]
+
         for enemy in self.level.enemies:
             enemy.update(dt, self.player, self.level.walls)
+
+            if hasattr(enemy, "projectiles") and enemy.projectiles:
+                self.enemy_bullets.extend(enemy.projectiles)
+                enemy.projectiles.clear()
 
             if enemy.rect.colliderect(self.player.rect):
                 enemy.on_touch_player(self.player)
@@ -357,9 +373,15 @@ class Game:
         assert self.level is not None
         assert self.player is not None
 
-        self.level.draw_environment(self.screen)
+        self.level.draw_environment(self.screen, self.visual_assets.get_wall_texture())
+
+        for obs in self.level.current_room.obstacles:
+            obs.draw(self.screen, self.visual_assets)
 
         for bullet in self.bullets:
+            bullet.draw(self.screen)
+
+        for bullet in self.enemy_bullets:
             bullet.draw(self.screen)
 
         for enemy in self.level.enemies:
