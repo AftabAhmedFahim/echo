@@ -3,7 +3,7 @@ import math
 SCREEN_WIDTH = 1536
 SCREEN_HEIGHT = 864
 FPS = 60
-WINDOW_TITLE = "ECHO Protocol"
+WINDOW_TITLE = "Zenith Protocol"
 
 TILE_SIZE = 48
 

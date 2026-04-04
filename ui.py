@@ -18,10 +18,10 @@ NAVY_TRANSPARENT = (8, 16, 32, 220)
 # Five story slides. Each slide has a title, body lines, and a colour theme.
 INTRO_SLIDES = [
     {
-        "title":  "// INCIDENT REPORT — SPACE STATION ECHO",
+        "title":  "// INCIDENT REPORT — SPACE STATION ZENITH",
         "lines": [
             "STARDATE 2147.04 — All systems nominal.",
-            "Station Echo orbits sector 7 as a joint",
+            "Station Zenith orbits sector 7 as a joint",
             "research and defence platform.",
             "",
             "650 personnel. 300 autonomous drones.",
@@ -44,7 +44,7 @@ INTRO_SLIDES = [
         "icon": "warning",
     },
     {
-        "title":  "// YOU ARE ECHO-1",
+        "title":  "// YOU ARE ZENITH-1",
         "lines": [
             "You are the last functional unit whose",
             "identity chip survived the pulse.",
@@ -72,7 +72,7 @@ INTRO_SLIDES = [
         "icon": "mission",
     },
     {
-        "title":  "// GOOD LUCK, ECHO-1",
+        "title":  "// GOOD LUCK, ZENITH-1",
         "lines": [
             "The station is counting on you.",
             "",
@@ -748,7 +748,7 @@ class UI:
         surface.blit(left_bg, (lx - 10, 40))
 
         # Game title — two lines for impact
-        t1 = self.font_title.render("ECHO", True, CYAN)
+        t1 = self.font_title.render("ZENITH", True, CYAN)
         t2 = self.font_large.render("PROTOCOL", True, (160, 220, 255))
         surface.blit(t1, t1.get_rect(topleft=(lx, 90)))
         surface.blit(t2, t2.get_rect(topleft=(lx, 175)))
@@ -873,7 +873,7 @@ class UI:
 
         music_rect, back_rect = self.get_settings_buttons()
         self._draw_button(surface, music_rect, "TOGGLE MUSIC CHANNELS")
-        self._draw_button(surface, back_rect, "RETURN TO ECHO DATABASE")
+        self._draw_button(surface, back_rect, "RETURN TO ZENITH DATABASE")
 
     def draw_pause(self, surface: pygame.Surface, music_enabled: bool) -> None:
         overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
@@ -985,7 +985,7 @@ class UI:
             return
 
         title = self.font_large.render("BROADCAST COMPLETE", True, GREEN)
-        info = self.font_medium.render("ECHO restored the network.", True, WHITE)
+        info = self.font_medium.render("ZENITH restored the network.", True, WHITE)
         sub = self.font_small.render("Press ESC to quit.", True, WHITE)
 
         surface.blit(title, title.get_rect(center=(SCREEN_WIDTH // 2, 260)))
