@@ -8,6 +8,7 @@ __pycache__/
 venv/
 env/
 ENV/
+myenv/
 
 # Packaging / build artifacts
 build/
