@@ -26,7 +26,6 @@ class VisualAssets:
         }
         self.base_entity_files = {
             "player": "assets/sprites/player.png",
-            "drone": "assets/sprites/drone.png",
         }
 
     def get_level_background(self, level_id: int, room_id: str | None = None) -> pygame.Surface:
@@ -163,13 +162,9 @@ class VisualAssets:
             "heavy": ((64, 64), (180, 130, 255)),
             "interceptor": ((38, 38), (240, 220, 110)),
             "boss": ((96, 96), (255, 95, 120)),
-            "drone": ((54, 54), (200, 200, 200)),
         }
         size, color = config.get(enemy_kind, ((44, 44), (200, 200, 200)))
-        
-        # Override key for the core high-quality drone assets
-        # Every enemy now uses the new "drone" animated disk-frames.
-        return self._get_entity_animation_set("drone", size, color)
+        return self._get_entity_animation_set(enemy_kind, size, color)
 
     def _get_entity_animation_set(
         self,
@@ -185,20 +180,15 @@ class VisualAssets:
         state_defs = {
             "idle": {"fps": 6.0, "frames": 6},
             "move": {"fps": 10.0, "frames": 8},
-            "attack": {"fps": 14.0, "frames": 6},
         }
 
         clips: dict[str, AnimationClip] = {}
-
-        # Check for demo.png sprite sheet first
-        sheet_path = os.path.join("assets", "sprites", "demo.png")
-        if os.path.exists(sheet_path):
-            clips = self._load_from_sprite_sheet(sheet_path, target_size)
-            self._animation_cache[cache_key] = clips
-            return clips
+        root_frames = self._load_root_frames(key, target_size)
 
         for state, cfg in state_defs.items():
             disk_frames = self._load_state_frames_from_disk(key, state, target_size)
+            if not disk_frames and root_frames:
+                disk_frames = root_frames
             if disk_frames:
                 clips[state] = AnimationClip(disk_frames, fps=cfg["fps"], loop=True)
                 continue
@@ -243,7 +233,48 @@ class VisualAssets:
         state: str,
         target_size: tuple[int, int],
     ) -> list[pygame.Surface]:
-        directory = os.path.join("assets", "sprites", entity_key, state)
+        state_aliases = {
+            "idle": ["idle"],
+            "move": ["move", "walk"],
+        }
+        roots = [
+            os.path.join("assets", "sprites", entity_key),
+            os.path.join("assets", "sprites", "enemies", entity_key),
+        ]
+
+        dir_candidates: list[str] = []
+        for root in roots:
+            for alias in state_aliases.get(state, [state]):
+                dir_candidates.extend(
+                    [
+                        os.path.join(root, alias),
+                        os.path.join(root, alias.capitalize()),
+                        os.path.join(root, alias.upper()),
+                    ]
+                )
+
+        for directory in dir_candidates:
+            frames = self._load_frames_from_directory(directory, target_size)
+            if frames:
+                return frames
+        return []
+
+    def _load_root_frames(self, entity_key: str, target_size: tuple[int, int]) -> list[pygame.Surface]:
+        roots = [
+            os.path.join("assets", "sprites", entity_key),
+            os.path.join("assets", "sprites", "enemies", entity_key),
+        ]
+        for root in roots:
+            frames = self._load_frames_from_directory(root, target_size)
+            if frames:
+                return frames
+        return []
+
+    def _load_frames_from_directory(
+        self,
+        directory: str,
+        target_size: tuple[int, int],
+    ) -> list[pygame.Surface]:
         if not os.path.isdir(directory):
             return []
 
@@ -254,6 +285,8 @@ class VisualAssets:
         frames: list[pygame.Surface] = []
         for file_name in frame_files:
             path = os.path.join(directory, file_name)
+            if not os.path.isfile(path):
+                continue
             img = self._load_image(path, target_size)
             if img is not None:
                 frames.append(img)

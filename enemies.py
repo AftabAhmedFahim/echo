@@ -49,12 +49,13 @@ class Enemy:
         self.contact_cooldown = 0.0
         self.contact_damage = contact_damage
         self.angle = 0.0
-        self.attack_timer = 0.0
         self.animator = Animator(animations, "idle") if animations else None
         self.projectiles: list[EnemyBullet] = []
         self.fire_cooldown = 0.0
         self.hover_timer = random.uniform(0, 2 * math.pi)
         self.hover_offset = 0.0
+        self.sprite_flip_x = False
+        self.facing_right = True
 
     @property
     def rect(self) -> pygame.Rect:
@@ -68,8 +69,6 @@ class Enemy:
     def update(self, dt: float, player, walls: list[pygame.Rect]) -> None:
         if self.contact_cooldown > 0:
             self.contact_cooldown -= dt
-        if self.attack_timer > 0:
-            self.attack_timer -= dt
         
         self.hover_timer += dt * 3.5
         self.hover_offset = math.sin(self.hover_timer) * 8.0
@@ -77,12 +76,10 @@ class Enemy:
         if self.animator:
             self.animator.update(dt)
 
-    def set_visual_state(self, moving: bool, attacking: bool = False) -> None:
+    def set_visual_state(self, moving: bool) -> None:
         if not self.animator:
             return
-        if attacking:
-            self.animator.set_state("attack")
-        elif moving:
+        if moving:
             self.animator.set_state("move")
         else:
             self.animator.set_state("idle")
@@ -131,11 +128,15 @@ class Enemy:
         if not self.animator:
             return False
         frame = self.animator.get_frame()
-        angle_degrees = -math.degrees(self.angle)
-        rotated = pygame.transform.rotozoom(frame, angle_degrees, 1.0)
+        if self.sprite_flip_x:
+            drawn = frame if self.facing_right else pygame.transform.flip(frame, True, False)
+        else:
+            angle_degrees = -math.degrees(self.angle)
+            drawn = pygame.transform.rotozoom(frame, angle_degrees, 1.0)
+
         # Apply hover offset to the visual rendering only, not collision
-        rect = rotated.get_rect(center=(int(self.pos.x), int(self.pos.y + self.hover_offset)))
-        surface.blit(rotated, rect)
+        rect = drawn.get_rect(center=(int(self.pos.x), int(self.pos.y + self.hover_offset)))
+        surface.blit(drawn, rect)
         return True
 
     def draw(self, surface: pygame.Surface) -> None:
@@ -182,7 +183,7 @@ class PatrolDrone(Enemy):
                 self.direction *= -1
                 self.start_pos = self.pos.copy() # Reset patrol anchor entirely
         
-        self.set_visual_state(moving=motion.length_squared() > 0.1, attacking=attacking)
+        self.set_visual_state(moving=motion.length_squared() > 0.1)
 
 
 class SeekerDrone(Enemy):
@@ -196,7 +197,7 @@ class SeekerDrone(Enemy):
         if motion.length_squared() > 0:
             self.angle = math.atan2(motion.y, motion.x)
         self.move_with_walls(motion, dt, walls)
-        self.set_visual_state(moving=motion.length_squared() > 0.1, attacking=to_player.length() < 120 if to_player.length_squared() > 0 else False)
+        self.set_visual_state(moving=motion.length_squared() > 0.1)
 
     def draw(self, surface: pygame.Surface) -> None:
         if not self._draw_sprite(surface):
@@ -227,7 +228,7 @@ class HeavyDrone(Enemy):
                 self.facing = self.facing.normalize()
                 self.angle = math.atan2(self.facing.y, self.facing.x)
         self.move_with_walls(motion, dt, walls)
-        self.set_visual_state(moving=motion.length_squared() > 0.1, attacking=to_player.length() < 145 if to_player.length_squared() > 0 else False)
+        self.set_visual_state(moving=motion.length_squared() > 0.1)
 
         if self.fire_cooldown > 0:
             self.fire_cooldown -= dt
@@ -264,6 +265,7 @@ class InterceptorDrone(Enemy):
     def __init__(self, x: float, y: float, animations: dict[str, AnimationClip] | None = None):
         super().__init__(x, y, 12, INTERCEPTOR_HEALTH, YELLOW, animations=animations)
         self.exploded = False
+        self.sprite_flip_x = True
 
     def update(self, dt: float, player, walls: list[pygame.Rect]) -> None:
         super().update(dt, player, walls)
@@ -271,8 +273,12 @@ class InterceptorDrone(Enemy):
         motion = to_player.normalize() * INTERCEPTOR_SPEED if to_player.length_squared() > 0 else pygame.Vector2()
         if motion.length_squared() > 0:
             self.angle = math.atan2(motion.y, motion.x)
+            if motion.x > 0.01:
+                self.facing_right = True
+            elif motion.x < -0.01:
+                self.facing_right = False
         self.move_with_walls(motion, dt, walls)
-        self.set_visual_state(moving=motion.length_squared() > 0.1, attacking=to_player.length() < 130 if to_player.length_squared() > 0 else False)
+        self.set_visual_state(moving=motion.length_squared() > 0.1)
 
     def explode_if_needed(self, player) -> bool:
         if self.exploded or not self.alive:
@@ -316,12 +322,12 @@ class FinalBoss(Enemy):
         distance = to_player.length() if to_player.length_squared() > 0 else 0.0
 
         self.dash_cooldown -= dt
-        attacking = False
+        dashing = False
 
         if self.dash_timer > 0:
             self.dash_timer -= dt
             motion = self.dash_velocity
-            attacking = True
+            dashing = True
         else:
             motion = pygame.Vector2(0, 0)
             if to_player.length_squared() > 0:
@@ -333,7 +339,7 @@ class FinalBoss(Enemy):
                 self.dash_cooldown = BOSS_DASH_COOLDOWN
                 self.dash_velocity = to_player.normalize() * BOSS_DASH_SPEED
                 motion = self.dash_velocity
-                attacking = True
+                dashing = True
 
         if self.fire_cooldown > 0:
             self.fire_cooldown -= dt
@@ -347,7 +353,7 @@ class FinalBoss(Enemy):
         if motion.length_squared() > 0:
             self.angle = math.atan2(motion.y, motion.x)
         self.move_with_walls(motion, dt, walls)
-        self.set_visual_state(moving=motion.length_squared() > 0.1, attacking=attacking or distance < 140)
+        self.set_visual_state(moving=motion.length_squared() > 0.1 or dashing)
 
     def on_touch_player(self, player) -> None:
         if self.contact_cooldown <= 0:

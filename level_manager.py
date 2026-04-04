@@ -725,14 +725,14 @@ class LevelData:
 
         return self.objective_text
 
-    def try_interact(self, player, dt: float, holding: bool) -> tuple[bool, str | None]:
+    def try_interact(self, player, dt: float, holding: bool) -> tuple[bool, str | None, bool]:
         room = self.current_room
 
         for log in room.message_fragments:
             if log.can_interact(player) and holding:
                 triggered = log.interact(dt, True)
                 if triggered:
-                    return True, log.text
+                    return True, log.text, True
 
         for obj in room.interactables:
             if not obj.can_interact(player):
@@ -745,7 +745,7 @@ class LevelData:
                 if triggered:
                     activated_count = sum(1 for antenna in self.all_antennas if antenna.completed)
                     self._start_antenna_wave(activated_count)
-                    return True, f"Antenna {obj.index} aligned"
+                    return True, f"Antenna {obj.index} aligned", False
                 continue
 
             if isinstance(obj, SequenceSwitch):
@@ -755,7 +755,7 @@ class LevelData:
                 if triggered and self.all_switches_active():
                     self._status_message = "All switches active. Final gate unlocked."
                 if triggered:
-                    return True, f"Switch {obj.index} active"
+                    return True, f"Switch {obj.index} active", False
                 continue
 
             if isinstance(obj, WeaponPickup):
@@ -765,15 +765,15 @@ class LevelData:
                 if triggered:
                     player.play_pickup()
                     player.weapon_module = obj.weapon_type
-                    return True, f"Equipped {obj.weapon_type.capitalize()}"
+                    return True, f"Equipped {obj.weapon_type.capitalize()}", False
                 continue
 
             if holding:
                 triggered = obj.interact(dt, holding)
                 if triggered:
-                    return True, None
+                    return True, None, False
 
-        return False, None
+        return False, None, False
 
     def get_prompt(self, player) -> str | None:
         room = self.current_room

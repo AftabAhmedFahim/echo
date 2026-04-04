@@ -74,6 +74,8 @@ class Game:
         self.transition_timer = 0.0
         self.transition_target_level = None
         self.transition_final = False
+        self.fragment_modal_active = False
+        self.fragment_modal_text = ""
         if show_loading:
             self.loading_title = loading_title or f"LEVEL {level_id}"
             self.loading_duration = loading_duration
@@ -96,6 +98,35 @@ class Game:
         self.load_level(1, show_loading=True, loading_title="LEVEL 1", loading_duration=2.0)
         self.state.set_playing()
 
+    def go_to_menu(self) -> None:
+        """Return to main menu without quitting the app."""
+        self.state.set_menu()
+        self.loading_timer = 0.0
+        self.transition_timer = 0.0
+        self.transition_target_level = None
+        self.transition_final = False
+        self.interact_held = False
+        self.interact_pressed = False
+        self.message = ""
+        self.message_timer = 0.0
+        self.fragment_modal_active = False
+        self.fragment_modal_text = ""
+        self.bullets.clear()
+        self.enemy_bullets.clear()
+
+    def open_fragment_modal(self, text: str) -> None:
+        self.fragment_modal_active = True
+        self.fragment_modal_text = text
+        self.interact_held = False
+        self.interact_pressed = False
+        self.message = ""
+        self.message_timer = 0.0
+
+    def close_fragment_modal(self) -> None:
+        self.fragment_modal_active = False
+        self.fragment_modal_text = ""
+        self.interact_held = False
+        self.interact_pressed = False
 
     def toggle_music(self) -> None:
         self.audio.toggle_music()
@@ -150,6 +181,13 @@ class Game:
         return button_rect.collidepoint(mouse_pos)
 
     def handle_event(self, event: pygame.event.Event) -> None:
+        if self.fragment_modal_active:
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                ok_rect = self.ui.get_fragment_modal_ok_button()
+                if self.check_button_click(event.pos, ok_rect):
+                    self.close_fragment_modal()
+            return
+
         if event.type == pygame.KEYDOWN:
             if self.state.is_menu() and event.key == pygame.K_ESCAPE:
                 pygame.event.post(pygame.event.Event(pygame.QUIT))
@@ -183,7 +221,7 @@ class Game:
 
             elif self.state.is_game_over():
                 if event.key == pygame.K_RETURN:
-                    self.state.set_menu()
+                    self.go_to_menu()
 
             elif self.state.is_ending():
                 if event.key == pygame.K_ESCAPE:
@@ -216,13 +254,13 @@ class Game:
                 if self.check_button_click(mouse_pos, music_rect):
                     self.toggle_music()
                 elif self.check_button_click(mouse_pos, back_rect):
-                    self.state.set_menu()
+                    self.go_to_menu()
                 return
 
             if self.state.is_controls():
                 back_rect = self.ui.get_controls_buttons()[0]
                 if self.check_button_click(mouse_pos, back_rect):
-                    self.state.set_menu()
+                    self.go_to_menu()
                 return
 
             if self.state.is_pause():
@@ -259,6 +297,10 @@ class Game:
             self.transition_timer -= dt
             if self.transition_timer <= 0:
                 self.finish_level_transition()
+            return
+
+        if self.fragment_modal_active:
+            self.interact_pressed = False
             return
 
         if not self.state.is_playing():
@@ -298,13 +340,16 @@ class Game:
             self.interact_pressed = False
             return
 
-        triggered, log_text = self.level.try_interact(self.player, dt, self.interact_held)
+        triggered, log_text, is_fragment = self.level.try_interact(self.player, dt, self.interact_held)
         if triggered:
             self.audio.play("interact")
             if log_text:
                 self.audio.play_log(log_text)
-                self.message = log_text
-                self.message_timer = 3.6
+                if is_fragment:
+                    self.open_fragment_modal(log_text)
+                else:
+                    self.message = log_text
+                    self.message_timer = 3.6
 
         self.level.update_level_events(dt, self.player)
         status_message = self.level.consume_status_message()
@@ -456,3 +501,6 @@ class Game:
                 self.loading_timer,
                 self.loading_duration,
             )
+
+        if self.fragment_modal_active:
+            self.ui.draw_fragment_modal(self.screen, self.fragment_modal_text)

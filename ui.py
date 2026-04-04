@@ -93,7 +93,7 @@ class IntroSequence:
     """Drives the animated story cutscene state."""
 
     CHARS_PER_SEC = 42          # typewriter speed
-    HOLD_AFTER_DONE = 1.8       # seconds to pause once text is fully revealed
+    HOLD_AFTER_DONE = 1.8       # legacy setting; slides now wait for player input
     TRANSITION_DUR  = 0.55      # slide fade duration in seconds
 
     def __init__(self):
@@ -176,10 +176,8 @@ class IntroSequence:
             self._chars_shown = min(self._total_chars(), new_chars)
             return
 
-        # Hold after fully revealed
-        self._hold_timer += dt
-        if self._hold_timer >= self.HOLD_AFTER_DONE:
-            self._advance()
+        # Once fully revealed, wait for explicit player input to advance.
+        return
 
     # ── draw ──────────────────────────────────────────────────────────────
     def draw(self, surface: pygame.Surface, ui: "UI") -> None:
@@ -455,6 +453,9 @@ class UI:
         music_rect = pygame.Rect(center_x, 450, 320, 48)
         return continue_rect, menu_rect, music_rect
 
+    def get_fragment_modal_ok_button(self) -> pygame.Rect:
+        return pygame.Rect(SCREEN_WIDTH // 2 - 90, SCREEN_HEIGHT // 2 + 170, 180, 48)
+
     def draw_panel_text(self, surface: pygame.Surface, text: str, x: int, y: int, color=WHITE) -> None:
         img = self.font_small.render(text, True, color)
         surface.blit(img, (x, y))
@@ -687,6 +688,45 @@ class UI:
 
         hint = self.font_small.render("Use the buttons below", True, WHITE)
         surface.blit(hint, hint.get_rect(center=(SCREEN_WIDTH // 2, 540)))
+
+    def draw_fragment_modal(self, surface: pygame.Surface, message: str) -> None:
+        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 205))
+        surface.blit(overlay, (0, 0))
+
+        panel = pygame.Rect(SCREEN_WIDTH // 2 - 430, SCREEN_HEIGHT // 2 - 220, 860, 440)
+        self._draw_cyber_panel(surface, panel)
+
+        title = self.font_large.render("MESSAGE FRAGMENT RECOVERED", True, CYAN)
+        surface.blit(title, title.get_rect(center=(SCREEN_WIDTH // 2, panel.top + 58)))
+
+        subtitle = self.font_small.render("Station Log", True, (140, 195, 220))
+        surface.blit(subtitle, subtitle.get_rect(center=(SCREEN_WIDTH // 2, panel.top + 98)))
+
+        text_rect = pygame.Rect(panel.left + 44, panel.top + 132, panel.width - 88, 210)
+        wrapped_lines: list[str] = []
+        words = message.split()
+        line = ""
+        for word in words:
+            probe = f"{line} {word}".strip()
+            if self.font_medium.size(probe)[0] <= text_rect.width:
+                line = probe
+            else:
+                if line:
+                    wrapped_lines.append(line)
+                line = word
+        if line:
+            wrapped_lines.append(line)
+
+        y = text_rect.top
+        max_lines = 6
+        for line_text in wrapped_lines[:max_lines]:
+            row = self.font_medium.render(line_text, True, WHITE)
+            surface.blit(row, (text_rect.left, y))
+            y += 38
+
+        ok_rect = self.get_fragment_modal_ok_button()
+        self._draw_button(surface, ok_rect, "OK")
 
     def draw_level_transition(self, surface: pygame.Surface, progress: float) -> None:
         overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
