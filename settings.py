@@ -58,6 +58,8 @@ BOSS_DASH_COOLDOWN = 2.5
 # Interaction
 INTERACT_RANGE = 60
 HOLD_INTERACT_TIME = 2.0
+MESSAGE_FRAGMENT_IMAGE_PATH = "assets/sprites/message_fragment.png"
+MESSAGE_FRAGMENT_SIZE = 30
 
 # UI
 FONT_NAME = None

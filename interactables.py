@@ -1,7 +1,17 @@
 import math
 import pygame
 
-from settings import GREEN, YELLOW, ORANGE, CYAN, PURPLE, HOLD_INTERACT_TIME, INTERACT_RANGE
+from settings import (
+    GREEN,
+    YELLOW,
+    ORANGE,
+    CYAN,
+    PURPLE,
+    HOLD_INTERACT_TIME,
+    INTERACT_RANGE,
+    MESSAGE_FRAGMENT_IMAGE_PATH,
+    MESSAGE_FRAGMENT_SIZE,
+)
 
 
 class Interactable:
@@ -92,11 +102,41 @@ class Antenna(Interactable):
 
 
 class MessageFragment(Interactable):
+    _icon_cache: dict[tuple[str, int], tuple[pygame.Surface, pygame.Surface] | None] = {}
+
     def __init__(self, x: int, y: int, text: str):
-        super().__init__(x, y, 30, 30, "Recover Message Fragment")
+        super().__init__(x, y, MESSAGE_FRAGMENT_SIZE, MESSAGE_FRAGMENT_SIZE, "Recover Message Fragment")
         self.text = text
 
+    @classmethod
+    def _get_icon_pair(cls, size: int) -> tuple[pygame.Surface, pygame.Surface] | None:
+        cache_key = (MESSAGE_FRAGMENT_IMAGE_PATH, size)
+        if cache_key in cls._icon_cache:
+            return cls._icon_cache[cache_key]
+
+        if not MESSAGE_FRAGMENT_IMAGE_PATH:
+            cls._icon_cache[cache_key] = None
+            return None
+
+        try:
+            icon = pygame.image.load(MESSAGE_FRAGMENT_IMAGE_PATH).convert_alpha()
+            icon = pygame.transform.smoothscale(icon, (size, size))
+        except (pygame.error, FileNotFoundError):
+            cls._icon_cache[cache_key] = None
+            return None
+
+        completed_icon = icon.copy()
+        completed_icon.set_alpha(140)
+        cls._icon_cache[cache_key] = (icon, completed_icon)
+        return cls._icon_cache[cache_key]
+
     def draw(self, surface: pygame.Surface) -> None:
+        icon_pair = self._get_icon_pair(self.rect.width)
+        if icon_pair is not None:
+            normal_icon, completed_icon = icon_pair
+            surface.blit(completed_icon if self.completed else normal_icon, self.rect)
+            return
+
         color = (180, 220, 255) if self.completed else (50, 150, 255)
         pygame.draw.circle(surface, color, self.rect.center, self.rect.width // 2)
 
