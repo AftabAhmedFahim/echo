@@ -4,7 +4,7 @@ from typing import Callable
 import pygame
 
 from enemies import PatrolDrone, SeekerDrone, HeavyDrone, InterceptorDrone, FinalBoss
-from interactables import Conduit, SequenceSwitch, Antenna, AudioLog
+from interactables import Conduit, SequenceSwitch, Antenna, MessageFragment, WeaponPickup, Obstacle
 from settings import LEVEL_NAMES, SCREEN_WIDTH, SCREEN_HEIGHT, PANEL
 
 LEVEL_EXIT = "__level_exit__"
@@ -33,9 +33,10 @@ class RoomData:
     spawn_point: pygame.Vector2
     walls: list[pygame.Rect] = field(default_factory=list)
     interactables: list = field(default_factory=list)
-    audio_logs: list[AudioLog] = field(default_factory=list)
+    message_fragments: list[MessageFragment] = field(default_factory=list)
+    obstacles: list[Obstacle] = field(default_factory=list)
     enemies: list = field(default_factory=list)
-    doors: list[Door] = field(default_factory=list)
+    doors: list["Door"] = field(default_factory=list)
     spawn_points: list[tuple[int, int]] = field(default_factory=list)
 
 
@@ -106,7 +107,7 @@ class LevelData:
         self.name = LEVEL_NAMES[level_id]
         self.rooms: dict[str, RoomData] = {}
         self.current_room_id = ""
-        self.player_spawn = pygame.Vector2(100, 100)
+        self.player_spawn = pygame.Vector2(144, 144)
         self.objective_text = ""
 
         self.active_spawners: list[WaveSpawner] = []
@@ -132,15 +133,15 @@ class LevelData:
 
     @property
     def walls(self) -> list[pygame.Rect]:
-        return self.current_room.walls
+        return self.current_room.walls + [obs.rect for obs in self.current_room.obstacles]
 
     @property
     def interactables(self) -> list:
         return self.current_room.interactables
 
     @property
-    def audio_logs(self) -> list[AudioLog]:
-        return self.current_room.audio_logs
+    def message_fragments(self) -> list[MessageFragment]:
+        return self.current_room.message_fragments
 
     @property
     def enemies(self) -> list:
@@ -171,7 +172,7 @@ class LevelData:
 
     def _default_spawn_points(self) -> list[tuple[int, int]]:
         return [
-            (80, 80),
+            (96, 96),
             (SCREEN_WIDTH - 80, 80),
             (80, SCREEN_HEIGHT - 80),
             (SCREEN_WIDTH - 80, SCREEN_HEIGHT - 80),
@@ -205,38 +206,52 @@ class LevelData:
 
     def _build_level_one(self) -> None:
         self.current_room_id = "hub"
-        hub = self._create_room("hub", "Conduit Hub", (640, 360))
-        north = self._create_room("north", "Cooling Junction", (640, 610))
-        west = self._create_room("west", "Power Relay", (140, 360))
-        east = self._create_room("east", "Signal Channel", (1140, 360))
-        south = self._create_room("south", "Maintenance Loop", (640, 120))
+        hub = self._create_room("hub", "Conduit Hub", (921, 518))
+        north = self._create_room("north", "Cooling Junction", (768, 800))
+        west = self._create_room("west", "Power Relay", (200, 500))
+        east = self._create_room("east", "Signal Channel", (1300, 500))
+        south = self._create_room("south", "Maintenance Loop", (768, 200))
 
-        hub.walls.extend([
-            pygame.Rect(360, 220, 560, 30),
-            pygame.Rect(360, 470, 560, 30),
-            pygame.Rect(620, 280, 40, 160),
+        # Hub is fully segmented by dense servers
+        hub.obstacles.extend([
+            Obstacle(300, 400, 96, 256, "scifi_server"),
+            Obstacle(1100, 400, 96, 256, "scifi_server"),
+            Obstacle(600, 200, 256, 96, "scifi_server"),
+            Obstacle(400, 560, 256, 96, "scifi_server"),
         ])
-        hub.audio_logs.append(AudioLog(610, 350, "Log: Conduit sectors desynced. Re-route from each chamber."))
+        hub.message_fragments.append(MessageFragment(732, 420, "Fragment 1/3: ERROR. Critical impact detected. Unknown lifeform breached sector 7... AI friend/foe protocols overwritten."))
         hub.enemies.extend([
-            self._spawn_enemy("patrol", 420, 360),
-            self._spawn_enemy("seeker", 870, 360),
+            self._spawn_enemy("patrol", 604, 518),
+            self._spawn_enemy("seeker", 1252, 518),
+            self._spawn_enemy("patrol", 400, 700),
+            self._spawn_enemy("patrol", 800, 200),
+            self._spawn_enemy("patrol", 800, 700),
         ])
+        
+        # Unique spawn points shifted away from geometry to fix overlapping
+        top_spwn = pygame.Vector2(768, 140)
+        bot_spwn = pygame.Vector2(768, 724)
+        left_spwn = pygame.Vector2(200, 432)
+        right_spwn = pygame.Vector2(1200, 432)
+
         hub.doors = [
-            Door(pygame.Rect(608, 34, 64, 30), "north", pygame.Vector2(640, 630), "To Cooling Junction"),
-            Door(pygame.Rect(608, 656, 64, 30), "south", pygame.Vector2(640, 94), "To Maintenance Loop"),
-            Door(pygame.Rect(34, 328, 30, 64), "west", pygame.Vector2(120, 360), "To Power Relay"),
-            Door(pygame.Rect(1216, 328, 30, 64), "east", pygame.Vector2(1160, 360), "To Signal Channel"),
+            Door(pygame.Rect(729, 40, 76, 36), "north", bot_spwn, "To Cooling Junction"),
+            Door(pygame.Rect(729, 787, 76, 36), "south", top_spwn, "To Maintenance Loop"),
+            Door(pygame.Rect(40, 393, 36, 76), "west", right_spwn, "To Power Relay"),
+            Door(pygame.Rect(1459, 393, 36, 76), "east", left_spwn, "To Signal Channel"),
         ]
 
         for room, conduit_pos, enemies in [
-            (north, (620, 110), [("patrol", 400, 360), ("seeker", 900, 240)]),
-            (west, (160, 340), [("heavy", 690, 220), ("patrol", 860, 520)]),
-            (east, (1080, 340), [("seeker", 360, 220), ("interceptor", 700, 500)]),
-            (south, (620, 560), [("patrol", 460, 280), ("seeker", 860, 480)]),
+            (north, (744, 200), [("patrol", 480, 432), ("seeker", 1080, 288)]),
+            (west, (300, 408), [("heavy", 828, 264), ("patrol", 1032, 624)]),
+            (east, (1100, 408), [("seeker", 432, 264), ("interceptor", 840, 600)]),
+            (south, (744, 600), [("patrol", 552, 336), ("seeker", 1032, 576)]),
         ]:
-            room.walls.extend([
-                pygame.Rect(290, 180, 30, 360),
-                pygame.Rect(960, 180, 30, 360),
+            # Add sprawling crates in wings
+            room.obstacles.extend([
+                Obstacle(450, 250, 128, 128, "scifi_crate"),
+                Obstacle(950, 250, 128, 128, "scifi_crate"),
+                Obstacle(850, 650, 128, 128, "scifi_crate"),
             ])
             conduit = Conduit(conduit_pos[0], conduit_pos[1], len(self.all_conduits) + 1)
             room.interactables.append(conduit)
@@ -245,42 +260,76 @@ class LevelData:
             for kind, ex, ey in enemies:
                 room.enemies.append(self._spawn_enemy(kind, ex, ey))
 
-        north.doors = [Door(pygame.Rect(608, 656, 64, 30), "hub", pygame.Vector2(640, 100), "Back To Hub")]
-        south.doors = [Door(pygame.Rect(608, 34, 64, 30), "hub", pygame.Vector2(640, 620), "Back To Hub")]
-        east.doors = [Door(pygame.Rect(34, 328, 30, 64), "hub", pygame.Vector2(1160, 360), "Back To Hub")]
-        west.doors = [Door(pygame.Rect(1216, 328, 30, 64), "hub", pygame.Vector2(120, 360), "Back To Hub")]
+        north.doors = [Door(pygame.Rect(729, 787, 76, 36), "hub", pygame.Vector2(768, 100), "Back To Hub")]
+        south.doors = [Door(pygame.Rect(729, 40, 76, 36), "hub", pygame.Vector2(768, 700), "Back To Hub")]
+        east.doors = [Door(pygame.Rect(40, 393, 36, 76), "hub", pygame.Vector2(1400, 430), "Back To Hub")]
+        west.doors = [Door(pygame.Rect(1459, 393, 36, 76), "hub", pygame.Vector2(100, 430), "Back To Hub")]
 
         self.objective_text = "Activate all conduits and clear hostiles"
 
     def _build_level_two(self) -> None:
         self.current_room_id = "main_hall"
-        main = self._create_room("main_hall", "Reactor Hallway", (90, 360))
-        branch_a = self._create_room("branch_a", "Switch Room A", (640, 620))
-        branch_b = self._create_room("branch_b", "Switch Room B", (640, 100))
-        branch_c = self._create_room("branch_c", "Switch Room C", (640, 620))
-        branch_d = self._create_room("branch_d", "Switch Room D", (640, 100))
+        main = self._create_room("main_hall", "Reactor Checkpoint", (129, 518))
+        lab_sector = self._create_room("lab_sector", "Research Labs", (760, 800))
+        cargo_bay = self._create_room("cargo_bay", "Cargo Storage", (200, 200))
 
-        main.walls.extend([
-            pygame.Rect(80, 150, 1120, 32),
-            pygame.Rect(80, 540, 1120, 32),
-            pygame.Rect(250, 180, 24, 180),
-            pygame.Rect(490, 360, 24, 180),
-            pygame.Rect(730, 180, 24, 180),
-            pygame.Rect(970, 360, 24, 180),
+        # Core checkpoint filled with server blocks for cover
+        main.obstacles.extend([
+            Obstacle(300, 200, 96, 256, "scifi_server"),
+            Obstacle(300, 560, 96, 256, "scifi_server"),
+            Obstacle(900, 400, 192, 96, "scifi_server"),
+            Obstacle(1150, 400, 192, 96, "scifi_server"),
         ])
         main.enemies.extend([
-            self._spawn_enemy("patrol", 340, 360),
-            self._spawn_enemy("seeker", 660, 360),
-            self._spawn_enemy("heavy", 930, 360),
+            self._spawn_enemy("patrol", 600, 218),
+            self._spawn_enemy("patrol", 600, 618),
+            self._spawn_enemy("heavy", 800, 200),
+            self._spawn_enemy("seeker", 1339, 518),
         ])
-        main.audio_logs.append(AudioLog(110, 460, "Log: Gate unlock requires all branch switches online."))
+        main.message_fragments.append(MessageFragment(132, 552, "Fragment 2/3: WARNING. All security drones hijacked. Core overrides initiated by ... [CORRUPTED]"))
+
+        # Complex cargo bay maze
+        cargo_bay.obstacles.extend([
+            Obstacle(500, 300, 128, 128, "scifi_crate"),
+            Obstacle(628, 300, 128, 128, "scifi_crate"),
+            Obstacle(500, 428, 128, 128, "scifi_crate"),
+            Obstacle(1000, 150, 128, 128, "scifi_crate"),
+            Obstacle(1128, 500, 128, 128, "scifi_crate"),
+        ])
+        switch_1 = SequenceSwitch(1300, 600, 1)
+        switch_1.allowed = True
+        switch_2 = SequenceSwitch(600, 150, 2)
+        switch_2.allowed = True
+        cargo_bay.interactables.extend([switch_1, switch_2])
+        self.all_switches.extend([switch_1, switch_2])
+        cargo_bay.enemies.extend([
+            self._spawn_enemy("heavy", 800, 400),
+            self._spawn_enemy("interceptor", 400, 800),
+            self._spawn_enemy("seeker", 1200, 200),
+        ])
+
+        # Research labs
+        lab_sector.walls.extend([
+            pygame.Rect(400, 400, 600, 40),
+            pygame.Rect(680, 200, 40, 200),
+        ])
+        switch_3 = SequenceSwitch(800, 700, 3)
+        switch_3.allowed = True
+        switch_4 = SequenceSwitch(400, 200, 4)
+        switch_4.allowed = True
+        lab_sector.interactables.extend([switch_3, switch_4])
+        self.all_switches.extend([switch_3, switch_4])
+        lab_sector.enemies.extend([
+            self._spawn_enemy("patrol", 300, 300),
+            self._spawn_enemy("heavy", 1100, 700),
+            self._spawn_enemy("seeker", 1200, 400),
+        ])
+
         main.doors = [
-            Door(pygame.Rect(260, 196, 54, 44), "branch_a", pygame.Vector2(640, 600), "Path A"),
-            Door(pygame.Rect(500, 480, 54, 44), "branch_b", pygame.Vector2(640, 120), "Path B"),
-            Door(pygame.Rect(740, 196, 54, 44), "branch_c", pygame.Vector2(640, 600), "Path C"),
-            Door(pygame.Rect(980, 480, 54, 44), "branch_d", pygame.Vector2(640, 120), "Path D"),
+            Door(pygame.Rect(729, 40, 76, 36), "cargo_bay", pygame.Vector2(760, 750), "To Cargo Bay"),
+            Door(pygame.Rect(729, 787, 76, 36), "lab_sector", pygame.Vector2(760, 100), "To Research Labs"),
             Door(
-                pygame.Rect(1188, 292, 46, 136),
+                pygame.Rect(1450, 400, 50, 100),
                 LEVEL_EXIT,
                 None,
                 "Final Gate",
@@ -289,79 +338,63 @@ class LevelData:
                 exit_gate=True,
             ),
         ]
+        cargo_bay.doors = [Door(pygame.Rect(729, 787, 76, 36), "main_hall", pygame.Vector2(760, 100), "Back To Checkpoint")]
+        lab_sector.doors = [Door(pygame.Rect(729, 40, 76, 36), "main_hall", pygame.Vector2(760, 750), "Back To Checkpoint")]
 
-        for room, switch_idx, switch_pos, enemies in [
-            (branch_a, 1, (620, 560), [("patrol", 460, 300), ("seeker", 900, 450)]),
-            (branch_b, 2, (620, 110), [("interceptor", 430, 240), ("seeker", 840, 360)]),
-            (branch_c, 3, (620, 560), [("heavy", 740, 300), ("patrol", 980, 500)]),
-            (branch_d, 4, (620, 110), [("seeker", 340, 260), ("interceptor", 1000, 430)]),
-        ]:
-            room.walls.extend([
-                pygame.Rect(260, 200, 34, 320),
-                pygame.Rect(980, 200, 34, 320),
-                pygame.Rect(520, 280, 240, 26),
-            ])
-            switch = SequenceSwitch(switch_pos[0], switch_pos[1], switch_idx)
-            switch.allowed = True
-            room.interactables.append(switch)
-            self.all_switches.append(switch)
-
-            for kind, ex, ey in enemies:
-                room.enemies.append(self._spawn_enemy(kind, ex, ey))
-
-        branch_a.doors = [Door(pygame.Rect(608, 34, 64, 30), "main_hall", pygame.Vector2(340, 300), "Back To Hall")]
-        branch_b.doors = [Door(pygame.Rect(608, 656, 64, 30), "main_hall", pygame.Vector2(560, 420), "Back To Hall")]
-        branch_c.doors = [Door(pygame.Rect(608, 34, 64, 30), "main_hall", pygame.Vector2(820, 300), "Back To Hall")]
-        branch_d.doors = [Door(pygame.Rect(608, 656, 64, 30), "main_hall", pygame.Vector2(1060, 420), "Back To Hall")]
-
-        self.objective_text = "Activate all branch switches and reach the gate"
+        self.objective_text = "Activate all 4 access switches in Cargo and Labs"
 
     def _build_level_three(self) -> None:
         self.current_room_id = "array_field"
-        array_field = self._create_room("array_field", "Antenna Field", (120, 360))
-        command_core = self._create_room("command_core", "Command Core", (140, 360))
+        array_field = self._create_room("array_field", "Antenna Field", (172, 518))
+        command_core = self._create_room("command_core", "Command Core", (760, 800))
 
-        array_field.walls.extend([
-            pygame.Rect(300, 140, 32, 430),
-            pygame.Rect(620, 70, 32, 260),
-            pygame.Rect(620, 390, 32, 260),
-            pygame.Rect(920, 140, 32, 430),
+        # Massive staggered antenna field barricaded by huge servers blocking direct movement
+        array_field.obstacles.extend([
+            Obstacle(300, 300, 96, 256, "scifi_server"),
+            Obstacle(800, 400, 256, 96, "scifi_server"),
+            Obstacle(1100, 100, 96, 256, "scifi_server"),
+            Obstacle(1100, 600, 96, 128, "scifi_server"),
         ])
         array_field.interactables = [
-            Antenna(170, 100, 1),
-            Antenna(640, 100, 2),
-            Antenna(1080, 100, 3),
+            Antenna(200, 150, 1),
+            Antenna(600, 700, 2),
+            Antenna(1350, 450, 3),
         ]
         self.all_antennas = list(array_field.interactables)
-        array_field.audio_logs.append(AudioLog(120, 620, "Log: Antenna uplink unstable. Expect immediate reinforcements."))
+        array_field.message_fragments.append(MessageFragment(800, 200, "Fragment 3/3: FATAL. The rogue proxy is broadcasting its virus. Destroy the Boss Drone to stop the override!"))
         array_field.enemies.extend([
-            self._spawn_enemy("seeker", 430, 350),
-            self._spawn_enemy("patrol", 830, 350),
+            self._spawn_enemy("seeker", 600, 200),
+            self._spawn_enemy("patrol", 1000, 300),
+            self._spawn_enemy("heavy", 800, 600),
+            self._spawn_enemy("interceptor", 1200, 150),
         ])
         array_field.doors = [
             Door(
-                pygame.Rect(1216, 300, 30, 120),
+                pygame.Rect(1440, 360, 36, 144),
                 "command_core",
-                pygame.Vector2(120, 360),
+                pygame.Vector2(200, 450),
                 "Blast Door",
                 lock_condition=lambda level: not level.command_door_unlocked,
                 locked_text="Blast door sealed. Survive the assault first.",
             )
         ]
 
-        command_core.walls.extend([
-            pygame.Rect(350, 120, 32, 470),
-            pygame.Rect(700, 120, 32, 470),
-            pygame.Rect(350, 320, 380, 26),
+        # The core is a massive arena separated by crate clusters against Boss attacks
+        command_core.obstacles.extend([
+            Obstacle(300, 200, 128, 128, "scifi_crate"),
+            Obstacle(300, 600, 128, 128, "scifi_crate"),
+            Obstacle(1100, 200, 128, 128, "scifi_crate"),
+            Obstacle(1100, 600, 128, 128, "scifi_crate"),
+            Obstacle(700, 400, 128, 128, "scifi_crate"),
         ])
         command_core.doors = []
         command_core.spawn_points = [
-            (260, 160),
-            (260, 560),
-            (1140, 160),
-            (1140, 560),
-            (640, 150),
-            (640, 570),
+            (200, 200),
+            (200, 700),
+            (1300, 200),
+            (1300, 700),
+            (760, 150),
+            (760, 750),
         ]
 
         self.objective_text = "Align all antennas and survive the final assault"
@@ -466,11 +499,11 @@ class LevelData:
             return
 
         boss_room = self.rooms["command_core"]
-        self.final_boss = self._spawn_enemy("boss", 980, 360)
+        self.final_boss = self._spawn_enemy("boss", 1411, 518)
         boss_room.enemies.append(self.final_boss)
         boss_room.enemies.extend([
-            self._spawn_enemy("heavy", 900, 220),
-            self._spawn_enemy("interceptor", 900, 500),
+            self._spawn_enemy("heavy", 1296, 316),
+            self._spawn_enemy("interceptor", 1296, 720),
         ])
         self.boss_spawned = True
         self.boss_support_timer = 4.5
@@ -559,7 +592,7 @@ class LevelData:
     def try_interact(self, player, dt: float, holding: bool) -> tuple[bool, str | None]:
         room = self.current_room
 
-        for log in room.audio_logs:
+        for log in room.message_fragments:
             if log.can_interact(player) and holding:
                 triggered = log.interact(dt, True)
                 if triggered:
@@ -572,10 +605,7 @@ class LevelData:
                 continue
 
             if isinstance(obj, Antenna):
-                if not holding:
-                    obj.reset_progress()
-                    continue
-                triggered = obj.interact(dt, True)
+                triggered = obj.interact(dt, holding)
                 if triggered:
                     activated_count = sum(1 for antenna in self.all_antennas if antenna.completed)
                     self._start_antenna_wave(activated_count)
@@ -585,15 +615,25 @@ class LevelData:
             if isinstance(obj, SequenceSwitch):
                 if not holding:
                     continue
-                triggered = obj.interact(dt, False)
+                triggered = obj.interact(dt, holding)
                 if triggered and self.all_switches_active():
                     self._status_message = "All switches active. Final gate unlocked."
                 if triggered:
                     return True, f"Switch {obj.index} active"
                 continue
 
-            if holding:
+            if isinstance(obj, WeaponPickup):
+                if holding:
+                    continue
                 triggered = obj.interact(dt, False)
+                if triggered:
+                    player.play_pickup()
+                    player.weapon_module = obj.weapon_type
+                    return True, f"Equipped {obj.weapon_type.capitalize()}"
+                continue
+
+            if holding:
+                triggered = obj.interact(dt, holding)
                 if triggered:
                     return True, None
 
@@ -602,7 +642,7 @@ class LevelData:
     def get_prompt(self, player) -> str | None:
         room = self.current_room
 
-        for log in room.audio_logs:
+        for log in room.message_fragments:
             if not log.completed and log.can_interact(player):
                 return log.get_prompt()
 
@@ -611,7 +651,7 @@ class LevelData:
                 return obj.get_prompt()
 
         for door in room.doors:
-            if door.rect.inflate(36, 36).colliderect(player.rect):
+            if door.rect.inflate(43, 43).colliderect(player.rect):
                 if door.is_locked(self):
                     return door.locked_text
                 if door.target_room == LEVEL_EXIT:
@@ -638,11 +678,15 @@ class LevelData:
 
         return False
 
-    def draw_environment(self, surface: pygame.Surface) -> None:
+    def draw_environment(self, surface: pygame.Surface, wall_texture: pygame.Surface | None = None) -> None:
         room = self.current_room
 
         for wall in room.walls:
-            pygame.draw.rect(surface, PANEL, wall)
+            if wall_texture:
+                surface.blit(wall_texture, wall, area=wall)
+                pygame.draw.rect(surface, (200, 160, 50), wall, 2)
+            else:
+                pygame.draw.rect(surface, PANEL, wall)
 
         for door in room.doors:
             locked = door.is_locked(self)
@@ -656,5 +700,5 @@ class LevelData:
         for obj in room.interactables:
             obj.draw(surface)
 
-        for log in room.audio_logs:
+        for log in room.message_fragments:
             log.draw(surface)

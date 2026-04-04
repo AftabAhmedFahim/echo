@@ -27,7 +27,7 @@ from settings import (
     BOSS_DASH_DURATION,
     BOSS_DASH_COOLDOWN,
 )
-
+from projectiles import EnemyBullet
 
 class Enemy:
     def __init__(
@@ -51,6 +51,10 @@ class Enemy:
         self.angle = 0.0
         self.attack_timer = 0.0
         self.animator = Animator(animations, "idle") if animations else None
+        self.projectiles: list[EnemyBullet] = []
+        self.fire_cooldown = 0.0
+        self.hover_timer = random.uniform(0, 2 * math.pi)
+        self.hover_offset = 0.0
 
     @property
     def rect(self) -> pygame.Rect:
@@ -66,6 +70,10 @@ class Enemy:
             self.contact_cooldown -= dt
         if self.attack_timer > 0:
             self.attack_timer -= dt
+        
+        self.hover_timer += dt * 3.5
+        self.hover_offset = math.sin(self.hover_timer) * 8.0
+        
         if self.animator:
             self.animator.update(dt)
 
@@ -125,7 +133,8 @@ class Enemy:
         frame = self.animator.get_frame()
         angle_degrees = -math.degrees(self.angle)
         rotated = pygame.transform.rotozoom(frame, angle_degrees, 1.0)
-        rect = rotated.get_rect(center=(int(self.pos.x), int(self.pos.y)))
+        # Apply hover offset to the visual rendering only, not collision
+        rect = rotated.get_rect(center=(int(self.pos.x), int(self.pos.y + self.hover_offset)))
         surface.blit(rotated, rect)
         return True
 
@@ -140,7 +149,7 @@ class PatrolDrone(Enemy):
         super().__init__(x, y, 16, PATROL_HEALTH, RED, animations=animations)
         self.start_pos = pygame.Vector2(x, y)
         self.direction = random.choice(
-            [pygame.Vector2(1, 0), pygame.Vector2(-1, 0), pygame.Vector2(0, 1), pygame.Vector2(0, -1)]
+            [pygame.Vector2(1, 0), pygame.Vector2(-1, 0)]
         )
         self.patrol_range = random.randint(80, 150)
         self.charge_range = 220
@@ -162,7 +171,17 @@ class PatrolDrone(Enemy):
 
         if motion.length_squared() > 0:
             self.angle = math.atan2(motion.y, motion.x)
+            
+        old_pos = self.pos.copy()
         self.move_with_walls(motion, dt, walls)
+        
+        # If patrolling and hit a wall, flip patrol direction immediately
+        if not attacking:
+            if (motion.x != 0 and abs(self.pos.x - old_pos.x) < 0.05) or \
+               (motion.y != 0 and abs(self.pos.y - old_pos.y) < 0.05):
+                self.direction *= -1
+                self.start_pos = self.pos.copy() # Reset patrol anchor entirely
+        
         self.set_visual_state(moving=motion.length_squared() > 0.1, attacking=attacking)
 
 
@@ -198,6 +217,7 @@ class HeavyDrone(Enemy):
     def update(self, dt: float, player, walls: list[pygame.Rect]) -> None:
         super().update(dt, player, walls)
         to_player = player.pos - self.pos
+        distance = to_player.length() if to_player.length_squared() > 0 else 0.0
         motion = to_player.normalize() * HEAVY_SPEED if to_player.length_squared() > 0 else pygame.Vector2()
         if motion.length_squared() > 0:
             desired_facing = motion.normalize()
@@ -208,6 +228,16 @@ class HeavyDrone(Enemy):
                 self.angle = math.atan2(self.facing.y, self.facing.x)
         self.move_with_walls(motion, dt, walls)
         self.set_visual_state(moving=motion.length_squared() > 0.1, attacking=to_player.length() < 145 if to_player.length_squared() > 0 else False)
+
+        if self.fire_cooldown > 0:
+            self.fire_cooldown -= dt
+        
+        if self.fire_cooldown <= 0 and to_player.length_squared() > 0 and distance < 200:
+            self.fire_cooldown = 2.0
+            direction = to_player.normalize()
+            for angle_offset in [-0.15, 0, 0.15]:
+                shoot_dir = pygame.Vector2(math.cos(self.angle + angle_offset), math.sin(self.angle + angle_offset))
+                self.projectiles.append(EnemyBullet(self.pos.x, self.pos.y, shoot_dir.x * 200, shoot_dir.y * 200, 15))
 
     def take_damage(self, amount: int, hit_direction: pygame.Vector2 | None = None) -> None:
         # Damage only from behind.
@@ -304,6 +334,15 @@ class FinalBoss(Enemy):
                 self.dash_velocity = to_player.normalize() * BOSS_DASH_SPEED
                 motion = self.dash_velocity
                 attacking = True
+
+        if self.fire_cooldown > 0:
+            self.fire_cooldown -= dt
+
+        if self.fire_cooldown <= 0 and self.dash_timer <= 0 and distance < 450 and to_player.length_squared() > 0:
+            self.fire_cooldown = 1.2
+            for angle_offset in [-0.25, -0.12, 0, 0.12, 0.25]:
+                shoot_dir = pygame.Vector2(math.cos(self.angle + angle_offset), math.sin(self.angle + angle_offset))
+                self.projectiles.append(EnemyBullet(self.pos.x, self.pos.y, shoot_dir.x * 220, shoot_dir.y * 220, 20))
 
         if motion.length_squared() > 0:
             self.angle = math.atan2(motion.y, motion.x)
